@@ -53,13 +53,15 @@
             
             // --- URL DE TU BACKEND ---
             // Esta será la URL que te dará Render.com
-            const BACKEND_API_URL = "URL_DE_TU_BACKEND_EN_RENDER"; 
+            const BACKEND_API_URL = "https://aura-interactiva-backend.onrender.com"; 
 
             if (!prepareButton) {
                 console.error("¡Error crítico! No se encontró el botón con id 'prepareButton'.");
                 return;
             }
             
+            // --- CORRECCIÓN ---
+            // Ahora la advertencia solo aparecerá si la URL es la de marcador de posición.
             if (BACKEND_API_URL === "URL_DE_TU_BACKEND_EN_RENDER") {
                 alert("ADVERTENCIA: La URL del backend no ha sido configurada en briefing.html. El formulario no funcionará.");
             }

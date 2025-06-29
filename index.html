@@ -34,11 +34,16 @@
             const sessionId = new URLSearchParams(window.location.search).get('session_id');
 
             // --- URL DEL BACKEND PARA WEBSOCKETS ---
-            // Esta será la URL que te dará Render.com, pero con wss://
-            const BACKEND_WS_HOST = "URL_DE_TU_BACKEND_EN_RENDER_SIN_HTTPS";
+            // Esta será la URL que te dará Render.com, pero sin https://
+            const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
 
-            if (!sessionId) { document.body.innerHTML = "<h1>Error: Falta ID de Sesión.</h1>"; return; }
+            if (!sessionId) { 
+                document.body.innerHTML = "<h1>Error: Falta ID de Sesión. Regresa al panel de briefing.</h1>"; 
+                return; 
+            }
             
+            // --- CORRECCIÓN ---
+            // La advertencia solo aparecerá si la URL es la de marcador de posición.
             if (BACKEND_WS_HOST === "URL_DE_TU_BACKEND_EN_RENDER_SIN_HTTPS") {
                  alert("ADVERTENCIA: La URL del WebSocket no ha sido configurada en index.html. La conversación no funcionará.");
             }
@@ -46,7 +51,7 @@
             let socket, mediaRecorder, isConversationActive = false;
             let iframeReady = false;
             
-            const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDI4ZDIzIn0=';
+            const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
 
             function connectWebSocket(stream) {
                 // Importante: Usamos wss:// (WebSocket Secure) para producción
@@ -92,7 +97,7 @@
                 socket.onclose = () => {
                     isConversationActive = false;
                     micButton.classList.remove('active');
-                    statusDiv.textContent = "Conversación terminada.";
+                    statusDiv.textContent = "Conversación terminada. Presiona para iniciar de nuevo.";
                     avatarIframe.style.display = 'none';
                     avatarPoster.style.display = 'block';
                     iframeReady = false; 
@@ -118,6 +123,7 @@
                     connectWebSocket(stream);
                 } catch (err) {
                     statusDiv.textContent = "Error: Permiso de micrófono denegado.";
+                    console.error("Error al obtener el micrófono:", err);
                     isConversationActive = false;
                     micButton.classList.remove('active');
                 }
