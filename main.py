@@ -31,13 +31,29 @@ embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=1024)
 vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings)
 deepgram_client = DeepgramClient(DEEPGRAM_API_KEY)
 active_sessions: Dict[str, Any] = {}
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# --- CORRECCIÓN DE CORS ---
+# Definimos explícitamente qué orígenes (sitios web) tienen permiso.
+# En tu caso, es la URL de tu frontend en Netlify.
+origins = [
+    "https://aurainteractiva.netlify.app",
+    "http://localhost", # Opcional: para pruebas locales en el futuro
+    "http://localhost:8000", # Opcional: para pruebas locales en el futuro
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins, # Usamos nuestra lista de orígenes permitidos
+    allow_credentials=True,
+    allow_methods=["*"], # Permitimos todos los métodos (GET, POST, etc.)
+    allow_headers=["*"], # Permitimos todas las cabeceras
+)
 
 # --- 2. ENDPOINT DE BRIEFING ---
 @app.post("/educar-sesion")
 async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(...), urls: str = Form(None), files: List[UploadFile] = File(None)):
-    session_id = "dev_session"
-    print(f"Usando namespace de desarrollo: '{session_id}'")
+    session_id = str(uuid.uuid4()) # Usamos un ID único para cada sesión
+    print(f"Creando nueva sesión con ID: '{session_id}'")
     
     all_docs = []; temp_dir = "temp_client_files"; os.makedirs(temp_dir, exist_ok=True)
     if files:
@@ -52,12 +68,16 @@ async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(.
     if all_docs:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200); docs_split = text_splitter.split_documents(all_docs)
         try:
+            # En un entorno de producción, no queremos limpiar todo el namespace.
+            # Por ahora, para la demo, mantenemos la limpieza.
+            # En el futuro, podríamos querer un namespace por cliente, no por sesión.
             vectorstore.delete(delete_all=True, namespace=session_id)
-            print(f"Namespace '{session_id}' limpiado.")
+            print(f"Namespace '{session_id}' limpiado antes de la ingesta.")
         except NotFoundException:
             print(f"Namespace '{session_id}' no encontrado. Se creará uno nuevo.")
         
         vectorstore.add_documents(documents=docs_split, namespace=session_id); print(f"¡Documentos indexados en namespace '{session_id}'!")
+    
     active_sessions[session_id] = {"clientName": clientName, "clientCompany": clientCompany, "chat_history": ""}
     return {"message": f"¡Clara lista para {clientName}!", "session_id": session_id}
 
@@ -78,7 +98,7 @@ class ConnectionManager:
         self.websocket = websocket; self.session_id = session_id; self.session_data = active_sessions.get(session_id, {}); self.retriever = vectorstore.as_retriever(search_kwargs={'namespace': self.session_id}); self.llm_chain = self._create_rag_chain(); self.is_speaking = asyncio.Event()
     
     def _create_rag_chain(self):
-        return ({"context": itemgetter("question") | self.retriever, "question": itemgetter("question"), "briefing": lambda x: f"Estás en una reunión con {self.session_data.get('clientName', 'un cliente')}.", "history": itemgetter("history")} | prompt | llm | StrOutputParser())
+        return ({"context": itemgetter("question") | self.retriever, "question": itemgetter("question"), "briefing": lambda x: f"Estás en una reunión con {self.session_data.get('clientName', 'un cliente')} de la empresa {self.session_data.get('clientCompany', 'desconocida')}.", "history": itemgetter("history")} | prompt | llm | StrOutputParser())
     
     async def _handle_ai_response(self, text: str):
         self.is_speaking.set()
@@ -86,11 +106,11 @@ class ConnectionManager:
             self.session_data["chat_history"] += f"Humano: {text}\n"; full_response = await self.llm_chain.ainvoke({"question": text, "history": self.session_data["chat_history"]})
             print(f"Respuesta generada por IA: {full_response}"); self.session_data["chat_history"] += f"Clara: {full_response}\n"
             
-            # Lógica simplificada: Enviamos el texto al frontend para que se lo pase al iframe
             await self.websocket.send_json({"type": "ai_response", "data": full_response})
 
         except Exception as e:
             print(f"Error durante la orquestación: {e}")
+            await self.websocket.send_json({"type": "error", "message": str(e)})
         finally:
             await self.websocket.send_json({"type": "response_end"})
             self.is_speaking.clear(); print("Ciclo de respuesta completado.")
@@ -114,12 +134,16 @@ class ConnectionManager:
         except Exception as e: print(f"Error en la conexión WebSocket: {e}")
         finally:
             if deepgram_connection: await deepgram_connection.finish()
+            if self.session_id in active_sessions:
+                del active_sessions[self.session_id]
+                print(f"Sesión {self.session_id} limpiada.")
+
 
 # --- Rutas y Ejecución ---
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept();
-    if session_id not in active_sessions: await websocket.close(code=4004, reason="ID de sesión no válido"); return
+    if session_id not in active_sessions: await websocket.close(code=4004, reason="ID de sesión no válido o expirado."); return
     manager = ConnectionManager(session_id, websocket)
     await manager.run()
 
