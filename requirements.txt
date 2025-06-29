@@ -1,0 +1,12 @@
+langchain
+langchain-openai
+langchain-pinecone
+langchain-community
+python-dotenv
+pypdf
+python-docx
+fastapi
+uvicorn
+deepgram-sdk
+pinecone-client==3.2.2
+gunicorn

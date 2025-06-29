@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head> <title>Prueba de Eco de Audio</title> </head>
+<body>
+    <h1>Prueba de Tubería de Audio</h1>
+    <button id="mic-button">🎤 Hablar</button>
+    <div id="status">Estado: Inactivo</div>
+    <h2>Respuesta del Servidor:</h2>
+    <div id="response"></div>
+    <script>
+        const micButton = document.getElementById('mic-button');
+        const statusDiv = document.getElementById('status');
+        const responseDiv = document.getElementById('response');
+        let mediaRecorder, socket;
+
+        micButton.addEventListener('click', () => {
+            if (micButton.textContent.includes('Hablar')) {
+                micButton.textContent = '🛑 Detener';
+                startStreaming();
+            } else {
+                micButton.textContent = '🎤 Hablar';
+                if (mediaRecorder) mediaRecorder.stop();
+            }
+        });
+
+        function startStreaming() {
+            socket = new WebSocket("ws://127.0.0.1:8000/ws_test");
+
+            socket.onopen = () => {
+                statusDiv.textContent = "Estado: Conectado. ¡Habla ahora!";
+                navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    mediaRecorder.ondataavailable = e => { if(e.data.size > 0) socket.send(e.data); };
+                    mediaRecorder.onstop = () => stream.getTracks().forEach(t => t.stop());
+                    mediaRecorder.start(250);
+                }).catch(e => statusDiv.textContent = `Error de Micrófono: ${e.message}`);
+            };
+            
+            socket.onmessage = (event) => { responseDiv.textContent = event.data; };
+            socket.onclose = () => { statusDiv.textContent = "Estado: Desconectado."; };
+            socket.onerror = () => { statusDiv.textContent = "Error de conexión."; };
+        }
+    </script>
+</body>
+</html>

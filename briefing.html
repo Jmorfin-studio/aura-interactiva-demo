@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Interactiva - Panel de Briefing</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f4f8; color: #1c3d5a; padding: 20px; line-height: 1.6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0b2d48; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        label { display: block; margin-top: 20px; font-weight: bold; font-size: 16px; }
+        input[type="text"], textarea { width: 97%; padding: 12px; margin-top: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; }
+        input[type="file"] { margin-top: 8px; font-size: 14px; }
+        textarea { height: 100px; resize: vertical; }
+        button { display: block; width: 100%; padding: 15px; margin-top: 30px; background-color: #007bff; color: white; border: none; border-radius: 6px; font-size: 18px; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #aaa; cursor: not-allowed; }
+        #status { margin-top: 20px; padding: 15px; border-radius: 6px; text-align: center; font-size: 16px; font-weight: bold; display: none; }
+        #file-list { margin-top: 10px; font-style: italic; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Panel de Preparación de Demo</h1>
+        <p>Usa este formulario para "informar" a Clara antes de cada reunión.</p>
+        
+        <h2>Información del Cliente</h2>
+        <label for="clientName">Nombre del Cliente:</label>
+        <input type="text" id="clientName" placeholder="Ej: Luz María Zepeda">
+
+        <label for="clientCompany">Empresa/Organización:</label>
+        <input type="text" id="clientCompany" placeholder="Ej: Fideicomiso de Turismo de La Paz (FITUPAZ)">
+        
+        <h2>Conocimiento Específico del Cliente</h2>
+        <label for="clientFiles">Subir Documentos (PDF, DOCX, TXT):</label>
+        <input type="file" id="clientFiles" multiple accept=".pdf,.docx,.txt">
+        <div id="file-list"></div>
+
+        <label for="clientUrls">Pegar URLs (una por línea):</label>
+        <textarea id="clientUrls" placeholder="https://es.golapaz.com/"></textarea>
+        
+        <button id="prepareButton">Educar y Preparar a Clara</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const prepareButton = document.getElementById('prepareButton');
+            const statusDiv = document.getElementById('status');
+            const fileInput = document.getElementById('clientFiles');
+            const fileListDiv = document.getElementById('file-list');
+            
+            // --- URL DE TU BACKEND ---
+            // Esta será la URL que te dará Render.com
+            const BACKEND_API_URL = "URL_DE_TU_BACKEND_EN_RENDER"; 
+
+            if (!prepareButton) {
+                console.error("¡Error crítico! No se encontró el botón con id 'prepareButton'.");
+                return;
+            }
+            
+            if (BACKEND_API_URL === "URL_DE_TU_BACKEND_EN_RENDER") {
+                alert("ADVERTENCIA: La URL del backend no ha sido configurada en briefing.html. El formulario no funcionará.");
+            }
+
+            fileInput.addEventListener('change', () => {
+                fileListDiv.innerHTML = '';
+                if (fileInput.files.length > 0) {
+                    let fileNames = 'Archivos seleccionados: ';
+                    for (const file of fileInput.files) {
+                        fileNames += `${file.name}, `;
+                    }
+                    fileListDiv.textContent = fileNames.slice(0, -2);
+                }
+            });
+
+            prepareButton.addEventListener('click', async () => {
+                statusDiv.style.display = 'block';
+                statusDiv.innerText = "Enviando información a Clara... (Esto puede tardar un poco)";
+                statusDiv.style.backgroundColor = '#e3f2fd';
+                statusDiv.style.color = '#0d47a1';
+                prepareButton.disabled = true;
+
+                const formData = new FormData();
+                formData.append('clientName', document.getElementById('clientName').value);
+                formData.append('clientCompany', document.getElementById('clientCompany').value);
+                formData.append('urls', document.getElementById('clientUrls').value);
+
+                for (const file of fileInput.files) {
+                    formData.append('files', file);
+                }
+
+                try {
+                    const response = await fetch(`${BACKEND_API_URL}/educar-sesion`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.detail || "Error desconocido del servidor");
+                    }
+                    
+                    statusDiv.innerText = result.message;
+                    statusDiv.style.backgroundColor = '#d4edda';
+                    statusDiv.style.color = '#155724';
+
+                    const sessionId = result.session_id;
+                    
+                    const demoUrl = `index.html?session_id=${sessionId}`;
+                    
+                    const linkHtml = `<br><br><strong>¡Todo listo!</strong><br><a href="${demoUrl}" target="_blank">Haz clic aquí para iniciar la demo con Clara</a>`;
+                    statusDiv.innerHTML += linkHtml;
+
+                } catch (error) {
+                    statusDiv.innerText = `Error: ${error.message}`;
+                    statusDiv.style.backgroundColor = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                } finally {
+                    prepareButton.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

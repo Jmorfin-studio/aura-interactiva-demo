@@ -1,0 +1,21 @@
+### CASO DE ÉXITO: SolAventuras - Oficinas de Turismo ###
+
+**Cliente:** SolAventuras, la oficina de promoción turística de la ficticia región costera de Costa Radiante.
+
+**El Desafío:**
+SolAventuras enfrentaba una competencia feroz de otros destinos turísticos. Su sitio web era informativo pero estático, y no lograba crear una conexión emocional con los viajeros potenciales. El equipo de atención al cliente estaba sobrecargado respondiendo preguntas repetitivas sobre horarios, actividades y recomendaciones. Necesitaban una forma innovadora y escalable de convertir a los visitantes del sitio web en turistas confirmados.
+
+**La Solución de Aura Interactiva: Creación de "Marco, el Guardián de la Costa"**
+Aura Interactiva no implementó un simple chatbot. Conceptualizamos y desarrollamos a "Marco", un embajador digital con la personalidad de un biólogo marino y explorador local.
+
+*   **Fase 1 (Estrategia de Personaje):** Diseñamos a Marco como un personaje apasionado y conocedor. Su historia era la de un antiguo guardián del faro local, con un profundo amor por la fauna y las tradiciones de Costa Radiante. Su tono de voz era aventurero y confiable.
+*   **Fase 2 (Desarrollo e Integración):** Seleccionamos la tecnología de avatar de HeyGen por su expresividad y la integramos con el modelo GPT-4o. Alimentamos su base de conocimiento con todos los folletos turísticos, guías de actividades, mapas y horarios de la región.
+*   **Fase 3 (Lanzamiento):** Lanzamos a "Marco" a través de una campaña en redes sociales titulada "¿Qué secretos te contará el Guardián de la Costa?", con videos cortos donde Marco presentaba "sus" lugares favoritos. Se integró en la página principal del sitio web de SolAventuras y en quioscos interactivos en el aeropuerto local.
+
+**Resultados Tangibles:**
+*   **Aumento del 25% en las Pre-Reservas de Tours:** Los usuarios que interactuaban con Marco tenían una tasa de conversión a pre-reserva de tours un 25% más alta que aquellos que no lo hacían.
+*   **Reducción del 40% en Consultas Repetitivas:** Marco manejó de forma autónoma miles de preguntas sobre "¿Qué hacer en Costa Radiante?", liberando al equipo humano para enfocarse en consultas complejas y ventas de paquetes grandes.
+*   **Incremento del 150% en el Tiempo de Permanencia en el Sitio Web:** Los visitantes pasaban mucho más tiempo explorando el destino a través de las historias y recomendaciones de Marco, creando un vínculo emocional con Costa Radiante antes de llegar.
+
+**Testimonio del Cliente:**
+"Marco no es una herramienta, es el alma de nuestra estrategia digital. Aura Interactiva entendió que no necesitábamos más tecnología, necesitábamos una historia. Marco es esa historia, y nuestros visitantes la aman." - Directora de Marketing, SolAventuras.

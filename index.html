@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Aura Interactiva - Demo Final</title>
+    <style>
+        body, html { margin: 0; padding: 0; background-color: #121212; color: white; font-family: sans-serif; overflow: hidden; }
+        #avatar-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        #avatar-poster { width: 100%; height: 100%; object-fit: cover; }
+        #avatar-iframe { display: none; /* Oculto por defecto */ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+        #controls-overlay { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 10; }
+        #mic-button { background-color: #4285F4; width: 80px; height: 80px; border-radius: 50%; border: none; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        #mic-button.active { background-color: #db4437; animation: pulse-red 1.5s infinite; }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(219, 68, 55, 0.7); } 100% { box-shadow: 0 0 0 20px rgba(219, 68, 55, 0); } }
+        #status { text-align: center; font-size: 16px; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px; }
+    </style>
+</head>
+<body>
+    <div id="avatar-container">
+        <img id="avatar-poster" src="https://i.ibb.co/ynch1sP3/clara-avatar.png" alt="Avatar de Clara">
+        <iframe id="avatar-iframe" allow="microphone"></iframe>
+    </div>
+    <div id="controls-overlay">
+        <button id="mic-button">🎤</button>
+        <div id="status">Presiona para iniciar conversación</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const micButton = document.getElementById('mic-button');
+            const statusDiv = document.getElementById('status');
+            const avatarPoster = document.getElementById('avatar-poster');
+            const avatarIframe = document.getElementById('avatar-iframe');
+            const sessionId = new URLSearchParams(window.location.search).get('session_id');
+
+            // --- URL DEL BACKEND PARA WEBSOCKETS ---
+            // Esta será la URL que te dará Render.com, pero con wss://
+            const BACKEND_WS_HOST = "URL_DE_TU_BACKEND_EN_RENDER_SIN_HTTPS";
+
+            if (!sessionId) { document.body.innerHTML = "<h1>Error: Falta ID de Sesión.</h1>"; return; }
+            
+            if (BACKEND_WS_HOST === "URL_DE_TU_BACKEND_EN_RENDER_SIN_HTTPS") {
+                 alert("ADVERTENCIA: La URL del WebSocket no ha sido configurada en index.html. La conversación no funcionará.");
+            }
+
+            let socket, mediaRecorder, isConversationActive = false;
+            let iframeReady = false;
+            
+            const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDI4ZDIzIn0=';
+
+            function connectWebSocket(stream) {
+                // Importante: Usamos wss:// (WebSocket Secure) para producción
+                const wsUrl = `wss://${BACKEND_WS_HOST}/ws/${sessionId}`;
+                socket = new WebSocket(wsUrl);
+                
+                socket.onopen = () => {
+                    statusDiv.textContent = "Conectado. ¡Habla ahora!";
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    mediaRecorder.addEventListener('dataavailable', e => {
+                        if (e.data.size > 0 && socket.readyState === WebSocket.OPEN) { socket.send(e.data); }
+                    });
+                    mediaRecorder.start(250);
+                };
+
+                socket.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'ai_response') {
+                        statusDiv.textContent = "Clara está respondiendo...";
+                        avatarPoster.style.display = 'none';
+                        avatarIframe.style.display = 'block';
+                        
+                        if (!iframeReady) {
+                            avatarIframe.src = HEYGEN_IFRAME_URL;
+                            avatarIframe.onload = () => {
+                                iframeReady = true;
+                                console.log("Iframe cargado y listo.");
+                                setTimeout(() => {
+                                    avatarIframe.contentWindow.postMessage({ type: 'heygen_streaming_task', task: { text: msg.data }}, '*');
+                                    console.log("Texto enviado al iframe:", msg.data);
+                                }, 500);
+                            };
+                        } else {
+                            avatarIframe.contentWindow.postMessage({ type: 'heygen_streaming_task', task: { text: msg.data }}, '*');
+                            console.log("Texto enviado al iframe ya cargado:", msg.data);
+                        }
+
+                    } else if (msg.type === 'response_end') {
+                        statusDiv.textContent = "Tu turno de hablar...";
+                    }
+                };
+
+                socket.onclose = () => {
+                    isConversationActive = false;
+                    micButton.classList.remove('active');
+                    statusDiv.textContent = "Conversación terminada.";
+                    avatarIframe.style.display = 'none';
+                    avatarPoster.style.display = 'block';
+                    iframeReady = false; 
+                    avatarIframe.src = "about:blank";
+                };
+            }
+            
+            micButton.addEventListener('click', () => {
+                if (isConversationActive) {
+                    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+                    if (socket && socket.readyState === WebSocket.OPEN) socket.close();
+                } else {
+                    startConversation();
+                }
+            });
+            
+            async function startConversation() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    isConversationActive = true;
+                    micButton.classList.add('active');
+                    statusDiv.textContent = "Conectando...";
+                    connectWebSocket(stream);
+                } catch (err) {
+                    statusDiv.textContent = "Error: Permiso de micrófono denegado.";
+                    isConversationActive = false;
+                    micButton.classList.remove('active');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

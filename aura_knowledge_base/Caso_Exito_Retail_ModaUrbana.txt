@@ -1,0 +1,21 @@
+### CASO DE ÉXITO: Moda Urbana - Retail & E-commerce ###
+
+**Cliente:** Moda Urbana, una marca de e-commerce de ropa de diseñador dirigida a un público joven y vanguardista.
+
+**El Desafío:**
+Moda Urbana tenía un excelente producto y un sitio web visualmente atractivo, pero la experiencia de compra online era impersonal. La tasa de abandono de carritos era alta y el valor promedio de los pedidos (AOV) estaba estancado. Competían en un mercado saturado donde la diferenciación de marca era clave.
+
+**La Solución de Aura Interactiva: Creación de "Leo, tu Estilista Virtual"**
+En lugar de un asistente de compras genérico, Aura Interactiva propuso crear a "Leo", un embajador digital que encarnara la personalidad cool, atrevida y experta de la marca.
+
+*   **Fase 1 (Estrategia de Personaje):** Definimos a Leo con un arquetipo de "Creador" y "Rebelde". Su tono de voz era directo, ingenioso y siempre a la última en tendencias. Su propósito no era solo vender ropa, sino ayudar a los usuarios a "encontrar su propio estilo".
+*   **Fase 2 (Desarrollo e Integración):** Utilizamos la tecnología de D-ID por su capacidad de integración rápida. Conectamos a Leo con el catálogo de productos de Moda Urbana a través de su API. La base de conocimiento de Leo incluía guías de estilo, combinaciones de prendas y las últimas colecciones.
+*   **Fase 3 (Lanzamiento):** Leo fue presentado como el "nuevo fichaje estrella" del equipo de estilismo de la marca. Se crearon "lookbooks" interactivos en video para Instagram y TikTok donde Leo presentaba las prendas. En el sitio, Leo aparecía para ofrecer consejos, "¿Buscas algo para una ocasión especial?", o para sugerir complementos al añadir un artículo al carrito.
+
+**Resultados Tangibles:**
+*   **Incremento del 18% en el Valor Promedio del Pedido (AOV):** Las recomendaciones proactivas de Leo para "completar el look" demostraron ser altamente efectivas, aumentando el valor de cada compra.
+*   **Aumento del 30% en la Tasa de Conversión en Páginas de Producto:** Los usuarios que interactuaban con Leo para resolver dudas sobre tallas o materiales convertían un 30% más.
+*   **Activo de Marca Reconocido:** Leo se convirtió en una figura reconocida en las redes sociales de la marca, generando engagement y reforzando la imagen de Moda Urbana como una marca innovadora y centrada en el cliente.
+
+**Testimonio del Cliente:**
+"Aura Interactiva nos vendió una estrategia, no un software. Leo le ha dado a nuestra marca una voz y una cara. Nuestros clientes no sienten que están hablando con un bot, sienten que están recibiendo consejos de un amigo con mucho estilo." - Fundador, Moda Urbana.

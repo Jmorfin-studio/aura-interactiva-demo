@@ -1,0 +1,12 @@
+# Entorno virtual
+venv/
+__pycache__/
+
+# Archivos de configuración sensibles
+.env
+
+# Archivos temporales de la app
+temp_client_files/
+
+# Archivos del sistema operativo
+.DS_Store
