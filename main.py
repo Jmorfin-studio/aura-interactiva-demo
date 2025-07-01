@@ -1,4 +1,4 @@
-# main.py (VERSIÓN DE DEPURACIÓN QUIRÚRGICA)
+# main.py (VERSIÓN FINAL Y FUNCIONAL - 02/JULIO/2025)
 
 import os, asyncio, uuid
 from dotenv import load_dotenv
@@ -21,6 +21,7 @@ from pinecone import Pinecone
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 load_dotenv()
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
@@ -30,8 +31,18 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 app = FastAPI(title="Aura Interactiva - Orquestador")
 
 # --- Configuración de CORS ---
-origins = [ "https://aurainteractiva.netlify.app", "http://localhost", "http://localhost:8000" ]
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+origins = [
+    "https://aurainteractiva.netlify.app",
+    "http://localhost",
+    "http://localhost:8000",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 llm = ChatOpenAI(model_name="gpt-4o", temperature=0.3)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=1024)
@@ -45,7 +56,7 @@ index = pinecone_client.Index(PINECONE_INDEX_NAME)
 vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
 print("¡Conexión con Pinecone y VectorStore establecidos con éxito!")
 
-# --- 2. ENDPOINT DE BRIEFING (Sin cambios) ---
+# --- 2. ENDPOINT DE BRIEFING ---
 @app.post("/educar-sesion")
 async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(...), urls: str = Form(None), files: List[UploadFile] = File(None)):
     session_id = str(uuid.uuid4()); print(f"Creando nueva sesión con ID: '{session_id}'")
@@ -65,74 +76,76 @@ async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(.
         vectorstore.add_documents(documents=docs_split, namespace=session_id); print(f"¡Documentos indexados en namespace '{session_id}'!")
     active_sessions[session_id] = {"clientName": clientName, "clientCompany": clientCompany, "chat_history": ""}; return {"message": f"¡Clara lista para {clientName}!", "session_id": session_id}
 
-# --- 3. LÓGICA DE WEBSOCKET (CON DEPURACIÓN EN __INIT__) ---
+# --- 3. LÓGICA DE WEBSOCKET ---
 prompt_template_str = """
 # CONSTITUCIÓN CONVERSACIONAL DE "CLARA"
-# ... (prompt sin cambios) ...
+# Eres Clara, una asistente digital experta y carismática de "Aura Interactiva". Tu propósito es inspirar y demostrar el "arte de lo posible". Hablas de forma concisa y natural en español. Siempre terminas tus respuestas con una pregunta para mantener la conversación viva.
+# BRIEFING DE REUNIÓN ACTUAL: {briefing}
+# CONOCIMIENTO RELEVANTE DE LA SESIÓN: {context}
+# HISTORIAL DE CONVERSACIÓN: {history}
+# PREGUNTA DEL USUARIO: {question}
 # TU RESPUESTA (Como Clara):
 """
 prompt = PromptTemplate.from_template(prompt_template_str)
 
 class ConnectionManager:
     def __init__(self, session_id: str, websocket: WebSocket):
-        print("DEBUG: Entrando en ConnectionManager.__init__")
-        self.websocket = websocket
-        self.session_id = session_id
-        print(f"DEBUG: Session ID '{self.session_id}' asignado.")
-        
-        self.session_data = active_sessions.get(session_id, {})
-        print("DEBUG: Datos de la sesión obtenidos.")
-        
-        self.retriever = vectorstore.as_retriever(search_kwargs={'namespace': self.session_id})
-        print("DEBUG: Retriever de Pinecone creado con éxito.")
-        
-        self.llm_chain = self._create_rag_chain()
-        print("DEBUG: Cadena RAG (llm_chain) creada con éxito.")
-        
-        self.is_speaking = asyncio.Event()
-        print("DEBUG: Evento de habla (is_speaking) inicializado.")
-        print("DEBUG: __init__ de ConnectionManager completado con éxito.")
+        self.websocket = websocket; self.session_id = session_id; self.session_data = active_sessions.get(session_id, {}); self.retriever = vectorstore.as_retriever(search_kwargs={'namespace': self.session_id}); self.llm_chain = self._create_rag_chain(); self.is_speaking = asyncio.Event()
     
     def _create_rag_chain(self): return ({"context": itemgetter("question") | self.retriever, "question": itemgetter("question"), "briefing": lambda x: f"Estás en una reunión con {self.session_data.get('clientName', 'un cliente')} de la empresa {self.session_data.get('clientCompany', 'desconocida')}.", "history": itemgetter("history")} | prompt | llm | StrOutputParser())
     
     async def _handle_ai_response(self, text: str):
-        # ... (código sin cambios) ...
-        self.is_speaking.set(); print("DEBUG: Evento is_speaking activado.")
+        self.is_speaking.set()
         try:
-            print(f"DEBUG: Enviando texto a LLM: '{text}'")
-            # ... resto del try ...
-        except Exception as e: print(f"!!!!!!!!!! ERROR EN _handle_ai_response !!!!!!!!!!!\n{e}")
-        finally: await self.websocket.send_json({"type": "response_end"}); self.is_speaking.clear(); print("DEBUG: Ciclo de respuesta completado.")
+            self.session_data["chat_history"] += f"Humano: {text}\n"; full_response = await self.llm_chain.ainvoke({"question": text, "history": self.session_data["chat_history"]})
+            print(f"Respuesta generada por IA: {full_response}"); self.session_data["chat_history"] += f"Clara: {full_response}\n"
+            await self.websocket.send_json({"type": "ai_response", "data": full_response})
+        except Exception as e: print(f"Error durante la orquestación: {e}")
+        finally: await self.websocket.send_json({"type": "response_end"}); self.is_speaking.clear()
 
     async def run(self):
-        print("DEBUG: Entrando en ConnectionManager.run()")
         deepgram_connection = None
         try:
             options = LiveOptions(model="nova-2", language="es-MX", smart_format=True, endpointing=300, interim_results=False)
-            print("DEBUG: Opciones de Deepgram creadas.")
-            # ... (resto del código sin cambios) ...
+            deepgram_connection = deepgram_client.listen.asynclive.v("1")
+            
+            async def on_message(self_inner, result, **kwargs):
+                transcript = result.channel.alternatives[0].transcript
+                if transcript and not self.is_speaking.is_set():
+                    asyncio.create_task(self._handle_ai_response(transcript))
+            
+            deepgram_connection.on(LiveTranscriptionEvents.Transcript, on_message)
+            await deepgram_connection.start(options)
+            
+            while True: 
+                data = await self.websocket.receive_bytes()
+                await deepgram_connection.send(data)
+        except WebSocketDisconnect:
+            print(f"Cliente desconectado de sesión {self.session_id}")
         except Exception as e:
-            print(f"!!!!!!!!!! ERROR CRÍTICO CAPTURADO EN run() !!!!!!!!!!!\n{e}")
+            print(f"Error crítico en la conexión WebSocket: {e}")
         finally:
-            # ... (código sin cambios) ...
-            print("DEBUG: Entrando al bloque finally de run().")
+            if deepgram_connection:
+                await deepgram_connection.finish()
+            if self.session_id in active_sessions:
+                del active_sessions[self.session_id]
+                print(f"Sesión {self.session_id} limpiada.")
 
-# --- Rutas y Ejecución (Sin cambios) ---
+
+# --- Rutas y Ejecución ---
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    print(f"DEBUG: Aceptando conexión WebSocket para sesión {session_id}")
-    await websocket.accept()
-    if session_id not in active_sessions:
-        print(f"ERROR: ID de sesión {session_id} no válido. Cerrando conexión.")
-        await websocket.close(code=4004, reason="ID de sesión no válido.")
-        return
-    try:
-        manager = ConnectionManager(session_id, websocket)
-        print("DEBUG: Objeto ConnectionManager creado. Llamando a manager.run()")
-        await manager.run()
-    except Exception as e:
-        print(f"!!!!!!!!!! ERROR CRÍTICO AL CREAR O EJECUTAR EL MANAGER !!!!!!!!!!!\n{e}")
+    await websocket.accept();
+    if session_id not in active_sessions: await websocket.close(code=4004, reason="ID de sesión no válido."); return
+    manager = ConnectionManager(session_id, websocket)
+    await manager.run()
 
-# ... (resto de las rutas sin cambios) ...
+@app.get("/briefing", response_class=FileResponse)
+async def get_briefing_page(): return "briefing.html"
+@app.get("/index.html", response_class=FileResponse)
+async def get_index_explicitly(): return "index.html"
+@app.get("/", response_class=FileResponse)
+async def get_index_page(): return "index.html"
+
 if __name__ == "__main__":
     import uvicorn; uvicorn.run("main:app", host="0.0.0.0", port=8000)
