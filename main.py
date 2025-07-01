@@ -30,41 +30,38 @@ PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 app = FastAPI(title="Aura Interactiva - Orquestador")
+
+# --- INICIO DE LA CORRECCIÓN DE CORS (MUY IMPORTANTE) ---
+# Definimos explícitamente qué orígenes (sitios web) tienen permiso.
+origins = [
+    "https://aurainteractiva.netlify.app", # Tu frontend en Netlify
+    "http://localhost",                   # Para pruebas locales futuras
+    "http://localhost:8000",              # Para pruebas locales futuras
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,       # Usamos nuestra lista de orígenes permitidos
+    allow_credentials=True,
+    allow_methods=["*"],         # Permitimos todos los métodos (GET, POST, etc.)
+    allow_headers=["*"],         # Permitimos todas las cabeceras
+)
+# --- FIN DE LA CORRECCIÓN DE CORS ---
+
 llm = ChatOpenAI(model_name="gpt-4o", temperature=0.3)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=1024)
 deepgram_client = DeepgramClient(DEEPGRAM_API_KEY)
 active_sessions: Dict[str, Any] = {}
 
-# --- INICIO DE LA CORRECCIÓN DE PINECONE ---
-# Inicializamos el cliente de Pinecone de forma explícita.
-# Esto elimina cualquier ambigüedad sobre cómo conectarse.
 print("Inicializando cliente de Pinecone de forma explícita...")
 pinecone_client = Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_ENVIRONMENT)
 
-# Obtenemos una referencia a nuestro índice específico.
 print(f"Accediendo al índice: {PINECONE_INDEX_NAME}")
 index = pinecone_client.Index(PINECONE_INDEX_NAME)
 
-# Ahora creamos el vectorstore usando la referencia del índice, no por nombre.
 vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
 print("¡Conexión con Pinecone y VectorStore establecidos con éxito!")
-# --- FIN DE LA CORRECCIÓN DE PINECONE ---
 
-
-# --- Configuración de CORS ---
-origins = [
-    "https://aurainteractiva.netlify.app",
-    "http://localhost",
-    "http://localhost:8000",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # --- 2. ENDPOINT DE BRIEFING ---
 @app.post("/educar-sesion")
@@ -96,7 +93,6 @@ async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(.
     return {"message": f"¡Clara lista para {clientName}!", "session_id": session_id}
 
 # --- 3. LÓGICA DE WEBSOCKET (Sin cambios) ---
-# ... (El resto del código desde aquí es idéntico y no necesita ser modificado) ...
 prompt_template_str = """
 # CONSTITUCIÓN CONVERSACIONAL DE "CLARA"
 # Eres Clara, una asistente digital experta y carismática de "Aura Interactiva". Tu propósito es inspirar y demostrar el "arte de lo posible". Hablas de forma concisa y natural en español. Siempre terminas tus respuestas con una pregunta para mantener la conversación viva.
