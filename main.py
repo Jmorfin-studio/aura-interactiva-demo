@@ -1,4 +1,4 @@
-# main.py (VERSIÓN DE DEPURACIÓN PARA RENDER)
+# main.py (VERSIÓN FINAL Y CORREGIDA PARA CONEXIÓN POD-BASED)
 
 import os, asyncio, uuid
 from dotenv import load_dotenv
@@ -17,27 +17,11 @@ from langchain.schema.output_parser import StrOutputParser
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 from pinecone.exceptions import NotFoundException
 
+# IMPORTANTE: Añadimos la importación directa de Pinecone
+from pinecone import Pinecone
+
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 load_dotenv()
-
-# --- INICIO DEL CÓDIGO DE DEPURACIÓN ---
-# Este bloque imprimirá los valores en los logs de Render para verificar que se están leyendo correctamente.
-print("--- INICIANDO DEPURACIÓN DE VARIABLES DE ENTORNO ---")
-retrieved_pinecone_key = os.getenv("PINECONE_API_KEY")
-retrieved_pinecone_env = os.getenv("PINECONE_ENVIRONMENT")
-print(f"PINECONE_API_KEY leída: '{retrieved_pinecone_key}'")
-print(f"PINECONE_ENVIRONMENT leído: '{retrieved_pinecone_env}'")
-if retrieved_pinecone_key:
-    print(f"Longitud de la clave de Pinecone: {len(retrieved_pinecone_key)}")
-    print(f"Primeros 5 caracteres: {retrieved_pinecone_key[:5]}")
-    print(f"Últimos 5 caracteres: {retrieved_pinecone_key[-5:]}")
-else:
-    print("¡ALERTA! PINECONE_API_KEY no se encontró o está vacía.")
-if not retrieved_pinecone_env:
-    print("¡ALERTA! PINECONE_ENVIRONMENT no se encontró o está vacío.")
-print("--- FIN DE LA DEPURACIÓN ---")
-# --- FIN DEL CÓDIGO DE DEPURACIÓN ---
-
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
@@ -48,11 +32,26 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 app = FastAPI(title="Aura Interactiva - Orquestador")
 llm = ChatOpenAI(model_name="gpt-4o", temperature=0.3)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=1024)
-vectorstore = PineconeVectorStore(index_name=PINECONE_INDEX_NAME, embedding=embeddings)
 deepgram_client = DeepgramClient(DEEPGRAM_API_KEY)
 active_sessions: Dict[str, Any] = {}
 
-# --- CORRECCIÓN DE CORS ---
+# --- INICIO DE LA CORRECCIÓN DE PINECONE ---
+# Inicializamos el cliente de Pinecone de forma explícita.
+# Esto elimina cualquier ambigüedad sobre cómo conectarse.
+print("Inicializando cliente de Pinecone de forma explícita...")
+pinecone_client = Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_ENVIRONMENT)
+
+# Obtenemos una referencia a nuestro índice específico.
+print(f"Accediendo al índice: {PINECONE_INDEX_NAME}")
+index = pinecone_client.Index(PINECONE_INDEX_NAME)
+
+# Ahora creamos el vectorstore usando la referencia del índice, no por nombre.
+vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
+print("¡Conexión con Pinecone y VectorStore establecidos con éxito!")
+# --- FIN DE LA CORRECCIÓN DE PINECONE ---
+
+
+# --- Configuración de CORS ---
 origins = [
     "https://aurainteractiva.netlify.app",
     "http://localhost",
@@ -96,7 +95,8 @@ async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(.
     active_sessions[session_id] = {"clientName": clientName, "clientCompany": clientCompany, "chat_history": ""}
     return {"message": f"¡Clara lista para {clientName}!", "session_id": session_id}
 
-# --- 3. LÓGICA DE WEBSOCKET ---
+# --- 3. LÓGICA DE WEBSOCKET (Sin cambios) ---
+# ... (El resto del código desde aquí es idéntico y no necesita ser modificado) ...
 prompt_template_str = """
 # CONSTITUCIÓN CONVERSACIONAL DE "CLARA"
 # Eres Clara, una asistente digital experta y carismática de "Aura Interactiva". Tu propósito es inspirar y demostrar el "arte de lo posible". Hablas de forma concisa y natural en español. Siempre terminas tus respuestas con una pregunta para mantener la conversación viva.
