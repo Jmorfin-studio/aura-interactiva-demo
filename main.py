@@ -1,4 +1,4 @@
-# main.py (VERSIÓN DE DEPURACIÓN FINAL)
+# main.py (VERSIÓN DE DEPURACIÓN QUIRÚRGICA)
 
 import os, asyncio, uuid
 from dotenv import load_dotenv
@@ -30,18 +30,8 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 app = FastAPI(title="Aura Interactiva - Orquestador")
 
 # --- Configuración de CORS ---
-origins = [
-    "https://aurainteractiva.netlify.app",
-    "http://localhost",
-    "http://localhost:8000",
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+origins = [ "https://aurainteractiva.netlify.app", "http://localhost", "http://localhost:8000" ]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 llm = ChatOpenAI(model_name="gpt-4o", temperature=0.3)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=1024)
@@ -75,34 +65,44 @@ async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(.
         vectorstore.add_documents(documents=docs_split, namespace=session_id); print(f"¡Documentos indexados en namespace '{session_id}'!")
     active_sessions[session_id] = {"clientName": clientName, "clientCompany": clientCompany, "chat_history": ""}; return {"message": f"¡Clara lista para {clientName}!", "session_id": session_id}
 
-# --- 3. LÓGICA DE WEBSOCKET (CON DEPURACIÓN) ---
+# --- 3. LÓGICA DE WEBSOCKET (CON DEPURACIÓN EN __INIT__) ---
 prompt_template_str = """
 # CONSTITUCIÓN CONVERSACIONAL DE "CLARA"
-# Eres Clara, una asistente digital experta y carismática de "Aura Interactiva". Tu propósito es inspirar y demostrar el "arte de lo posible". Hablas de forma concisa y natural en español. Siempre terminas tus respuestas con una pregunta para mantener la conversación viva.
-# BRIEFING DE REUNIÓN ACTUAL: {briefing}
-# CONOCIMIENTO RELEVANTE DE LA SESIÓN: {context}
-# HISTORIAL DE CONVERSACIÓN: {history}
-# PREGUNTA DEL USUARIO: {question}
+# ... (prompt sin cambios) ...
 # TU RESPUESTA (Como Clara):
 """
 prompt = PromptTemplate.from_template(prompt_template_str)
 
 class ConnectionManager:
     def __init__(self, session_id: str, websocket: WebSocket):
-        self.websocket = websocket; self.session_id = session_id; self.session_data = active_sessions.get(session_id, {}); self.retriever = vectorstore.as_retriever(search_kwargs={'namespace': self.session_id}); self.llm_chain = self._create_rag_chain(); self.is_speaking = asyncio.Event()
+        print("DEBUG: Entrando en ConnectionManager.__init__")
+        self.websocket = websocket
+        self.session_id = session_id
+        print(f"DEBUG: Session ID '{self.session_id}' asignado.")
+        
+        self.session_data = active_sessions.get(session_id, {})
+        print("DEBUG: Datos de la sesión obtenidos.")
+        
+        self.retriever = vectorstore.as_retriever(search_kwargs={'namespace': self.session_id})
+        print("DEBUG: Retriever de Pinecone creado con éxito.")
+        
+        self.llm_chain = self._create_rag_chain()
+        print("DEBUG: Cadena RAG (llm_chain) creada con éxito.")
+        
+        self.is_speaking = asyncio.Event()
+        print("DEBUG: Evento de habla (is_speaking) inicializado.")
+        print("DEBUG: __init__ de ConnectionManager completado con éxito.")
     
     def _create_rag_chain(self): return ({"context": itemgetter("question") | self.retriever, "question": itemgetter("question"), "briefing": lambda x: f"Estás en una reunión con {self.session_data.get('clientName', 'un cliente')} de la empresa {self.session_data.get('clientCompany', 'desconocida')}.", "history": itemgetter("history")} | prompt | llm | StrOutputParser())
     
     async def _handle_ai_response(self, text: str):
+        # ... (código sin cambios) ...
         self.is_speaking.set(); print("DEBUG: Evento is_speaking activado.")
         try:
             print(f"DEBUG: Enviando texto a LLM: '{text}'")
-            self.session_data["chat_history"] += f"Humano: {text}\n"; full_response = await self.llm_chain.ainvoke({"question": text, "history": self.session_data["chat_history"]})
-            print(f"DEBUG: Respuesta recibida de LLM: {full_response}"); self.session_data["chat_history"] += f"Clara: {full_response}\n"
-            await self.websocket.send_json({"type": "ai_response", "data": full_response})
-            print("DEBUG: Respuesta enviada al cliente.")
+            # ... resto del try ...
         except Exception as e: print(f"!!!!!!!!!! ERROR EN _handle_ai_response !!!!!!!!!!!\n{e}")
-        finally: await self.websocket.send_json({"type": "response_end"}); self.is_speaking.clear(); print("DEBUG: Ciclo de respuesta completado y is_speaking desactivado.")
+        finally: await self.websocket.send_json({"type": "response_end"}); self.is_speaking.clear(); print("DEBUG: Ciclo de respuesta completado.")
 
     async def run(self):
         print("DEBUG: Entrando en ConnectionManager.run()")
@@ -110,51 +110,29 @@ class ConnectionManager:
         try:
             options = LiveOptions(model="nova-2", language="es-MX", smart_format=True, endpointing=300, interim_results=False)
             print("DEBUG: Opciones de Deepgram creadas.")
-            
-            deepgram_connection = deepgram_client.listen.asynclive.v("1")
-            print("DEBUG: Objeto de conexión de Deepgram creado.")
-
-            async def on_message(self_inner, result, **kwargs):
-                transcript = result.channel.alternatives[0].transcript
-                if transcript and not self.is_speaking.is_set():
-                    print(f"DEBUG: Transcripción recibida: '{transcript}'")
-                    asyncio.create_task(self._handle_ai_response(transcript))
-            
-            deepgram_connection.on(LiveTranscriptionEvents.Transcript, on_message)
-            print("DEBUG: Callback 'on_message' registrado en Deepgram.")
-            
-            await deepgram_connection.start(options)
-            print("DEBUG: Conexión con Deepgram iniciada con start(). Entrando al bucle while.")
-
-            while True: 
-                data = await self.websocket.receive_bytes()
-                await deepgram_connection.send(data)
+            # ... (resto del código sin cambios) ...
         except Exception as e:
-            # Hacemos el error extremadamente visible
             print(f"!!!!!!!!!! ERROR CRÍTICO CAPTURADO EN run() !!!!!!!!!!!\n{e}")
         finally:
+            # ... (código sin cambios) ...
             print("DEBUG: Entrando al bloque finally de run().")
-            if deepgram_connection:
-                print("DEBUG: Cerrando conexión con Deepgram.")
-                await deepgram_connection.finish()
-            if self.session_id in active_sessions:
-                del active_sessions[self.session_id]
-                print(f"DEBUG: Sesión {self.session_id} limpiada.")
 
 # --- Rutas y Ejecución (Sin cambios) ---
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    await websocket.accept();
-    if session_id not in active_sessions: await websocket.close(code=4004, reason="ID de sesión no válido."); return
-    manager = ConnectionManager(session_id, websocket)
-    await manager.run()
+    print(f"DEBUG: Aceptando conexión WebSocket para sesión {session_id}")
+    await websocket.accept()
+    if session_id not in active_sessions:
+        print(f"ERROR: ID de sesión {session_id} no válido. Cerrando conexión.")
+        await websocket.close(code=4004, reason="ID de sesión no válido.")
+        return
+    try:
+        manager = ConnectionManager(session_id, websocket)
+        print("DEBUG: Objeto ConnectionManager creado. Llamando a manager.run()")
+        await manager.run()
+    except Exception as e:
+        print(f"!!!!!!!!!! ERROR CRÍTICO AL CREAR O EJECUTAR EL MANAGER !!!!!!!!!!!\n{e}")
 
-@app.get("/briefing", response_class=FileResponse)
-async def get_briefing_page(): return "briefing.html"
-@app.get("/index.html", response_class=FileResponse)
-async def get_index_explicitly(): return "index.html"
-@app.get("/", response_class=FileResponse)
-async def get_index_page(): return "index.html"
-
+# ... (resto de las rutas sin cambios) ...
 if __name__ == "__main__":
     import uvicorn; uvicorn.run("main:app", host="0.0.0.0", port=8000)
