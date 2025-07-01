@@ -1,4 +1,4 @@
-# main.py (VERSIÓN FINAL Y FUNCIONAL - Arquitectura de Iframe)
+# main.py (VERSIÓN DE DEPURACIÓN PARA RENDER)
 
 import os, asyncio, uuid
 from dotenv import load_dotenv
@@ -19,6 +19,26 @@ from pinecone.exceptions import NotFoundException
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 load_dotenv()
+
+# --- INICIO DEL CÓDIGO DE DEPURACIÓN ---
+# Este bloque imprimirá los valores en los logs de Render para verificar que se están leyendo correctamente.
+print("--- INICIANDO DEPURACIÓN DE VARIABLES DE ENTORNO ---")
+retrieved_pinecone_key = os.getenv("PINECONE_API_KEY")
+retrieved_pinecone_env = os.getenv("PINECONE_ENVIRONMENT")
+print(f"PINECONE_API_KEY leída: '{retrieved_pinecone_key}'")
+print(f"PINECONE_ENVIRONMENT leído: '{retrieved_pinecone_env}'")
+if retrieved_pinecone_key:
+    print(f"Longitud de la clave de Pinecone: {len(retrieved_pinecone_key)}")
+    print(f"Primeros 5 caracteres: {retrieved_pinecone_key[:5]}")
+    print(f"Últimos 5 caracteres: {retrieved_pinecone_key[-5:]}")
+else:
+    print("¡ALERTA! PINECONE_API_KEY no se encontró o está vacía.")
+if not retrieved_pinecone_env:
+    print("¡ALERTA! PINECONE_ENVIRONMENT no se encontró o está vacío.")
+print("--- FIN DE LA DEPURACIÓN ---")
+# --- FIN DEL CÓDIGO DE DEPURACIÓN ---
+
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
@@ -33,26 +53,24 @@ deepgram_client = DeepgramClient(DEEPGRAM_API_KEY)
 active_sessions: Dict[str, Any] = {}
 
 # --- CORRECCIÓN DE CORS ---
-# Definimos explícitamente qué orígenes (sitios web) tienen permiso.
-# En tu caso, es la URL de tu frontend en Netlify.
 origins = [
     "https://aurainteractiva.netlify.app",
-    "http://localhost", # Opcional: para pruebas locales en el futuro
-    "http://localhost:8000", # Opcional: para pruebas locales en el futuro
+    "http://localhost",
+    "http://localhost:8000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # Usamos nuestra lista de orígenes permitidos
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # Permitimos todos los métodos (GET, POST, etc.)
-    allow_headers=["*"], # Permitimos todas las cabeceras
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- 2. ENDPOINT DE BRIEFING ---
 @app.post("/educar-sesion")
 async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(...), urls: str = Form(None), files: List[UploadFile] = File(None)):
-    session_id = str(uuid.uuid4()) # Usamos un ID único para cada sesión
+    session_id = str(uuid.uuid4())
     print(f"Creando nueva sesión con ID: '{session_id}'")
     
     all_docs = []; temp_dir = "temp_client_files"; os.makedirs(temp_dir, exist_ok=True)
@@ -68,9 +86,6 @@ async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(.
     if all_docs:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200); docs_split = text_splitter.split_documents(all_docs)
         try:
-            # En un entorno de producción, no queremos limpiar todo el namespace.
-            # Por ahora, para la demo, mantenemos la limpieza.
-            # En el futuro, podríamos querer un namespace por cliente, no por sesión.
             vectorstore.delete(delete_all=True, namespace=session_id)
             print(f"Namespace '{session_id}' limpiado antes de la ingesta.")
         except NotFoundException:
