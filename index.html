@@ -33,8 +33,6 @@
             const avatarIframe = document.getElementById('avatar-iframe');
             const sessionId = new URLSearchParams(window.location.search).get('session_id');
 
-            // --- URL DEL BACKEND PARA WEBSOCKETS ---
-            // Esta será la URL que te dará Render.com, pero sin https://
             const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
 
             if (!sessionId) { 
@@ -42,19 +40,21 @@
                 return; 
             }
             
-            // --- CORRECCIÓN ---
-            // La advertencia solo aparecerá si la URL es la de marcador de posición.
-            if (BACKEND_WS_HOST === "URL_DE_TU_BACKEND_EN_RENDER_SIN_HTTPS") {
-                 alert("ADVERTENCIA: La URL del WebSocket no ha sido configurada en index.html. La conversación no funcionará.");
-            }
-
             let socket, mediaRecorder, isConversationActive = false;
             let iframeReady = false;
             
             const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
+            
+            // --- INICIO DE LA CORRECCIÓN ---
+            // Esta función "limpia" el texto de la IA antes de enviarlo a HeyGen.
+            // Reemplaza múltiples espacios, saltos de línea y tabulaciones con un solo espacio.
+            function sanitizeText(text) {
+                if (typeof text !== 'string') return '';
+                return text.replace(/[\s\r\n]+/g, ' ').trim();
+            }
+            // --- FIN DE LA CORRECCIÓN ---
 
             function connectWebSocket(stream) {
-                // Importante: Usamos wss:// (WebSocket Secure) para producción
                 const wsUrl = `wss://${BACKEND_WS_HOST}/ws/${sessionId}`;
                 socket = new WebSocket(wsUrl);
                 
@@ -69,24 +69,31 @@
 
                 socket.onmessage = (event) => {
                     const msg = JSON.parse(event.data);
-                    if (msg.type === 'ai_response') {
+                    if (msg.type === 'ai_response' && msg.data) {
                         statusDiv.textContent = "Clara está respondiendo...";
                         avatarPoster.style.display = 'none';
                         avatarIframe.style.display = 'block';
                         
+                        // --- INICIO DE LA CORRECCIÓN ---
+                        // Limpiamos el texto ANTES de pasarlo al iframe.
+                        const cleanText = sanitizeText(msg.data);
+                        console.log("Texto original:", msg.data);
+                        console.log("Texto sanitizado:", cleanText);
+                        // --- FIN DE LA CORRECCIÓN ---
+
+                        const messageToSend = { type: 'heygen_streaming_task', task: { text: cleanText }};
+
                         if (!iframeReady) {
                             avatarIframe.src = HEYGEN_IFRAME_URL;
                             avatarIframe.onload = () => {
                                 iframeReady = true;
                                 console.log("Iframe cargado y listo.");
                                 setTimeout(() => {
-                                    avatarIframe.contentWindow.postMessage({ type: 'heygen_streaming_task', task: { text: msg.data }}, '*');
-                                    console.log("Texto enviado al iframe:", msg.data);
+                                    avatarIframe.contentWindow.postMessage(messageToSend, '*');
                                 }, 500);
                             };
                         } else {
-                            avatarIframe.contentWindow.postMessage({ type: 'heygen_streaming_task', task: { text: msg.data }}, '*');
-                            console.log("Texto enviado al iframe ya cargado:", msg.data);
+                            avatarIframe.contentWindow.postMessage(messageToSend, '*');
                         }
 
                     } else if (msg.type === 'response_end') {
