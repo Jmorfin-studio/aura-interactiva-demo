@@ -45,14 +45,14 @@
             
             const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
             
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Esta función "limpia" el texto de la IA antes de enviarlo a HeyGen.
-            // Reemplaza múltiples espacios, saltos de línea y tabulaciones con un solo espacio.
+            // --- INICIO DE LA CORRECCIÓN FINAL ---
             function sanitizeText(text) {
                 if (typeof text !== 'string') return '';
-                return text.replace(/[\s\r\n]+/g, ' ').trim();
+                // Esta expresión regular elimina TODOS los caracteres de control no imprimibles (incluidos saltos de línea)
+                // y luego colapsa cualquier espacio en blanco múltiple a uno solo.
+                return text.replace(/[\x00-\x1F\x7F-\x9F]/g, "").replace(/\s+/g, ' ').trim();
             }
-            // --- FIN DE LA CORRECCIÓN ---
+            // --- FIN DE LA CORRECCIÓN FINAL ---
 
             function connectWebSocket(stream) {
                 const wsUrl = `wss://${BACKEND_WS_HOST}/ws/${sessionId}`;
@@ -74,12 +74,9 @@
                         avatarPoster.style.display = 'none';
                         avatarIframe.style.display = 'block';
                         
-                        // --- INICIO DE LA CORRECCIÓN ---
-                        // Limpiamos el texto ANTES de pasarlo al iframe.
                         const cleanText = sanitizeText(msg.data);
                         console.log("Texto original:", msg.data);
                         console.log("Texto sanitizado:", cleanText);
-                        // --- FIN DE LA CORRECCIÓN ---
 
                         const messageToSend = { type: 'heygen_streaming_task', task: { text: cleanText }};
 
