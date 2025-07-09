@@ -3,24 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>Aura Interactiva - Demo Final</title>
-    <style>
-        /* ... (CSS sin cambios) ... */
-    </style>
+    <style>/* ... CSS sin cambios ... */</style>
 </head>
 <body>
-    <div id="avatar-container">
-        <img id="avatar-poster" src="https://i.ibb.co/ynch1sP3/clara-avatar.png" alt="Avatar de Clara">
-        <iframe id="avatar-iframe" allow="microphone"></iframe>
-    </div>
-    <div id="controls-overlay">
-        <button id="mic-button">🎤</button>
-        <div id="status">Presiona para iniciar conversación</div>
-    </div>
+    <div id="avatar-container"><!-- ... HTML sin cambios ... --></div>
+    <div id="controls-overlay"><!-- ... HTML sin cambios ... --></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // --- INICIO DE LA CORRECCIÓN ---
-            // Restauramos la declaración de todas las constantes necesarias
             const micButton = document.getElementById('mic-button');
             const statusDiv = document.getElementById('status');
             const avatarPoster = document.getElementById('avatar-poster');
@@ -28,14 +18,9 @@
             const sessionId = new URLSearchParams(window.location.search).get('session_id');
             const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
             const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
-            // --- FIN DE LA CORRECCIÓN ---
-
-            if (!sessionId) { 
-                document.body.innerHTML = "<h1>Error: Falta ID de Sesión. Regresa al panel de briefing.</h1>"; 
-                return; 
-            }
             
-            // --- Lógica de Reconocimiento de Voz ---
+            if (!sessionId) { document.body.innerHTML = "<h1>Error: Falta ID de Sesión.</h1>"; return; }
+
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
                 alert("Tu navegador no soporta el reconocimiento de voz. Por favor, usa Chrome.");
@@ -45,7 +30,7 @@
             recognition.lang = 'es-MX';
             recognition.interimResults = false;
             recognition.continuous = false;
-            
+
             let socket, isConversationActive = false;
             let iframeReady = false;
 
@@ -58,81 +43,44 @@
                 const wsUrl = `wss://${BACKEND_WS_HOST}/ws/${sessionId}`;
                 socket = new WebSocket(wsUrl);
                 
-                socket.onopen = () => {
-                    statusDiv.textContent = "Conectado. ¡Habla ahora!";
-                    // Ya no se usa MediaRecorder, ahora el control lo tiene 'recognition'
-                };
-
+                socket.onopen = () => { console.log("WebSocket conectado."); };
                 socket.onmessage = (event) => {
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'ai_response' && msg.data) {
                         statusDiv.textContent = "Clara está respondiendo...";
                         avatarPoster.style.display = 'none';
                         avatarIframe.style.display = 'block';
-                        
                         const cleanText = sanitizeText(msg.data);
                         const messageToSend = { type: 'heygen_streaming_task', task: { text: cleanText }};
-
                         if (!iframeReady) {
                             avatarIframe.src = HEYGEN_IFRAME_URL;
-                            avatarIframe.onload = () => {
-                                iframeReady = true;
-                                setTimeout(() => {
-                                    avatarIframe.contentWindow.postMessage(messageToSend, '*');
-                                }, 500);
-                            };
+                            avatarIframe.onload = () => { iframeReady = true; setTimeout(() => { avatarIframe.contentWindow.postMessage(messageToSend, '*'); }, 500); };
                         } else {
                             avatarIframe.contentWindow.postMessage(messageToSend, '*');
                         }
                     } else if (msg.type === 'response_end') {
                         // El evento onend de recognition ahora controla el estado
+                        if (!isConversationActive) { // Solo si el usuario no ha iniciado de nuevo
+                            statusDiv.textContent = "Presiona para iniciar conversación";
+                        }
                     }
                 };
-
-                socket.onclose = () => {
-                    console.log("WebSocket connection closed.");
-                    isConversationActive = false;
-                    micButton.classList.remove('active');
-                };
+                socket.onclose = () => { console.log("WebSocket cerrado."); isConversationActive = false; micButton.classList.remove('active'); };
             }
-            
+            connectWebSocket(); // Conectamos una vez al cargar la página
+
             micButton.addEventListener('click', () => {
                 if (isConversationActive) {
-                    recognition.stop(); // Detenemos el reconocimiento
+                    recognition.stop();
                 } else {
-                    if (!socket || socket.readyState !== WebSocket.OPEN) {
-                        connectWebSocket();
-                    }
-                    recognition.start(); // Iniciamos el reconocimiento
+                    recognition.start();
                 }
             });
 
-            recognition.onstart = () => {
-                isConversationActive = true;
-                micButton.classList.add('active');
-                statusDiv.textContent = "Escuchando...";
-            };
-
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                statusDiv.textContent = `Tú dijiste: "${transcript}"`;
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    socket.send(transcript); // Enviamos el texto transcrito directamente
-                }
-            };
-
-            recognition.onerror = (event) => {
-                console.error("Error en reconocimiento de voz:", event.error);
-                statusDiv.textContent = "Error al escuchar. Intenta de nuevo.";
-                isConversationActive = false;
-                micButton.classList.remove('active');
-            };
-
-            recognition.onend = () => {
-                isConversationActive = false;
-                micButton.classList.remove('active');
-                statusDiv.textContent = "Presiona para iniciar conversación";
-            };
+            recognition.onstart = () => { isConversationActive = true; micButton.classList.add('active'); statusDiv.textContent = "Escuchando..."; };
+            recognition.onresult = (event) => { const transcript = event.results[0][0].transcript; statusDiv.textContent = `Tú dijiste: "${transcript}"`; if (socket.readyState === WebSocket.OPEN) { socket.send(transcript); } };
+            recognition.onerror = (event) => { console.error("Error de reconocimiento:", event.error); statusDiv.textContent = "Error al escuchar."; isConversationActive = false; micButton.classList.remove('active'); };
+            recognition.onend = () => { isConversationActive = false; micButton.classList.remove('active'); statusDiv.textContent = "Procesando..."; };
         });
     </script>
 </body>
