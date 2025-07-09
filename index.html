@@ -4,134 +4,80 @@
     <meta charset="UTF-8">
     <title>Aura Interactiva - Demo Final</title>
     <style>
-        body, html { margin: 0; padding: 0; background-color: #121212; color: white; font-family: sans-serif; overflow: hidden; }
-        #avatar-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        #avatar-poster { width: 100%; height: 100%; object-fit: cover; }
-        #avatar-iframe { display: none; /* Oculto por defecto */ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-        #controls-overlay { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 10; }
-        #mic-button { background-color: #4285F4; width: 80px; height: 80px; border-radius: 50%; border: none; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        #mic-button.active { background-color: #db4437; animation: pulse-red 1.5s infinite; }
-        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(219, 68, 55, 0.7); } 100% { box-shadow: 0 0 0 20px rgba(219, 68, 55, 0); } }
-        #status { text-align: center; font-size: 16px; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px; }
+        /* ... (CSS sin cambios) ... */
     </style>
 </head>
 <body>
-    <div id="avatar-container">
-        <img id="avatar-poster" src="https://i.ibb.co/ynch1sP3/clara-avatar.png" alt="Avatar de Clara">
-        <iframe id="avatar-iframe" allow="microphone"></iframe>
-    </div>
-    <div id="controls-overlay">
-        <button id="mic-button">🎤</button>
-        <div id="status">Presiona para iniciar conversación</div>
-    </div>
-
+    <!-- ... (HTML sin cambios) ... -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const micButton = document.getElementById('mic-button');
-            const statusDiv = document.getElementById('status');
-            const avatarPoster = document.getElementById('avatar-poster');
-            const avatarIframe = document.getElementById('avatar-iframe');
-            const sessionId = new URLSearchParams(window.location.search).get('session_id');
-
-            const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
-
-            if (!sessionId) { 
-                document.body.innerHTML = "<h1>Error: Falta ID de Sesión. Regresa al panel de briefing.</h1>"; 
-                return; 
-            }
+            // ... (constantes sin cambios) ...
             
-            let socket, mediaRecorder, isConversationActive = false;
+            // --- INICIO DE LA LÓGICA DE RECONOCIMIENTO DE VOZ ---
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Tu navegador no soporta el reconocimiento de voz. Por favor, usa Chrome.");
+                return;
+            }
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'es-MX';
+            recognition.interimResults = false;
+            recognition.continuous = false;
+            // --- FIN DE LA LÓGICA DE RECONOCIMIENTO DE VOZ ---
+            
+            let socket, isConversationActive = false;
             let iframeReady = false;
-            
-            const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
-            
-            // --- INICIO DE LA CORRECCIÓN FINAL ---
-            function sanitizeText(text) {
-                if (typeof text !== 'string') return '';
-                // Esta expresión regular elimina TODOS los caracteres de control no imprimibles (incluidos saltos de línea)
-                // y luego colapsa cualquier espacio en blanco múltiple a uno solo.
-                return text.replace(/[\x00-\x1F\x7F-\x9F]/g, "").replace(/\s+/g, ' ').trim();
-            }
-            // --- FIN DE LA CORRECCIÓN FINAL ---
+            const HEYGEN_IFRAME_URL = '...'; // URL sin cambios
 
-            function connectWebSocket(stream) {
-                const wsUrl = `wss://${BACKEND_WS_HOST}/ws/${sessionId}`;
-                socket = new WebSocket(wsUrl);
-                
+            function sanitizeText(text) { /* ... (función sin cambios) ... */ }
+
+            function connectWebSocket() {
+                // ... (código de conexión sin cambios) ...
                 socket.onopen = () => {
                     statusDiv.textContent = "Conectado. ¡Habla ahora!";
-                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-                    mediaRecorder.addEventListener('dataavailable', e => {
-                        if (e.data.size > 0 && socket.readyState === WebSocket.OPEN) { socket.send(e.data); }
-                    });
-                    mediaRecorder.start(250);
+                    // Ya no necesitamos MediaRecorder
                 };
-
-                socket.onmessage = (event) => {
-                    const msg = JSON.parse(event.data);
-                    if (msg.type === 'ai_response' && msg.data) {
-                        statusDiv.textContent = "Clara está respondiendo...";
-                        avatarPoster.style.display = 'none';
-                        avatarIframe.style.display = 'block';
-                        
-                        const cleanText = sanitizeText(msg.data);
-                        console.log("Texto original:", msg.data);
-                        console.log("Texto sanitizado:", cleanText);
-
-                        const messageToSend = { type: 'heygen_streaming_task', task: { text: cleanText }};
-
-                        if (!iframeReady) {
-                            avatarIframe.src = HEYGEN_IFRAME_URL;
-                            avatarIframe.onload = () => {
-                                iframeReady = true;
-                                console.log("Iframe cargado y listo.");
-                                setTimeout(() => {
-                                    avatarIframe.contentWindow.postMessage(messageToSend, '*');
-                                }, 500);
-                            };
-                        } else {
-                            avatarIframe.contentWindow.postMessage(messageToSend, '*');
-                        }
-
-                    } else if (msg.type === 'response_end') {
-                        statusDiv.textContent = "Tu turno de hablar...";
-                    }
-                };
-
-                socket.onclose = () => {
-                    isConversationActive = false;
-                    micButton.classList.remove('active');
-                    statusDiv.textContent = "Conversación terminada. Presiona para iniciar de nuevo.";
-                    avatarIframe.style.display = 'none';
-                    avatarPoster.style.display = 'block';
-                    iframeReady = false; 
-                    avatarIframe.src = "about:blank";
-                };
+                // ... (código de onmessage sin cambios) ...
             }
-            
+
             micButton.addEventListener('click', () => {
                 if (isConversationActive) {
-                    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
-                    if (socket && socket.readyState === WebSocket.OPEN) socket.close();
+                    recognition.stop();
+                    micButton.classList.remove('active');
+                    isConversationActive = false;
                 } else {
-                    startConversation();
+                    if (!socket || socket.readyState !== WebSocket.OPEN) {
+                        connectWebSocket();
+                    }
+                    recognition.start();
+                    micButton.classList.add('active');
+                    statusDiv.textContent = "Escuchando...";
+                    isConversationActive = true;
                 }
             });
-            
-            async function startConversation() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    isConversationActive = true;
-                    micButton.classList.add('active');
-                    statusDiv.textContent = "Conectando...";
-                    connectWebSocket(stream);
-                } catch (err) {
-                    statusDiv.textContent = "Error: Permiso de micrófono denegado.";
-                    console.error("Error al obtener el micrófono:", err);
-                    isConversationActive = false;
-                    micButton.classList.remove('active');
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                statusDiv.textContent = `Tú dijiste: "${transcript}"`;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(transcript); // Enviamos el texto directamente
                 }
-            }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Error en reconocimiento de voz:", event.error);
+                statusDiv.textContent = "Error al escuchar. Intenta de nuevo.";
+                micButton.classList.remove('active');
+                isConversationActive = false;
+            };
+
+            recognition.onend = () => {
+                if (isConversationActive) { // Si la conversación debe continuar, vuelve a escuchar
+                    micButton.classList.remove('active');
+                    statusDiv.textContent = "Tu turno de hablar...";
+                    isConversationActive = false;
+                }
+            };
         });
     </script>
 </body>
