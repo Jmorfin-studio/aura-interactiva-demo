@@ -47,10 +47,13 @@
             // --- INICIO DE LA CORRECCIÓN FINAL ---
             function sanitizeText(text) {
                 if (typeof text !== 'string') return '';
-                // Esta expresión regular es más agresiva. Elimina cualquier cosa que no sea
-                // una letra, número, espacio, o signo de puntuación común.
-                // También colapsa espacios en blanco múltiples a uno solo.
-                let clean = text.replace(/[^a-zA-Z0-9\s.,¿?¡!áéíóúÁÉÍÓÚüÜñÑ]/g, '');
+                // 1. Reemplaza comillas dobles para no romper el JSON.
+                let clean = text.replace(/"/g, "'");
+                // 2. Elimina saltos de línea y otros caracteres de control.
+                clean = clean.replace(/[\n\r\t]/g, ' ');
+                // 3. Elimina cualquier otro carácter no imprimible.
+                clean = clean.replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+                // 4. Colapsa espacios múltiples a uno solo y quita los de los extremos.
                 return clean.replace(/\s+/g, ' ').trim();
             }
             // --- FIN DE LA CORRECCIÓN FINAL ---
