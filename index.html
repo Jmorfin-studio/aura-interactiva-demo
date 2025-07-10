@@ -3,11 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <title>Aura Interactiva - Demo Final</title>
-    <style>/* ... CSS sin cambios ... */</style>
+    <style>
+        body, html { margin: 0; padding: 0; background-color: #121212; color: white; font-family: sans-serif; overflow: hidden; }
+        #avatar-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        #avatar-poster { width: 100%; height: 100%; object-fit: cover; }
+        #avatar-iframe { display: none; /* Oculto por defecto */ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+        #controls-overlay { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 10; }
+        #mic-button { background-color: #4285F4; width: 80px; height: 80px; border-radius: 50%; border: none; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        #mic-button.active { background-color: #db4437; animation: pulse-red 1.5s infinite; }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(219, 68, 55, 0.7); } 100% { box-shadow: 0 0 0 20px rgba(219, 68, 55, 0); } }
+        #status { text-align: center; font-size: 16px; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px; }
+    </style>
 </head>
 <body>
-    <div id="avatar-container"><!-- ... HTML sin cambios ... --></div>
-    <div id="controls-overlay"><!-- ... HTML sin cambios ... --></div>
+    <div id="avatar-container">
+        <img id="avatar-poster" src="https://i.ibb.co/ynch1sP3/clara-avatar.png" alt="Avatar de Clara">
+        <iframe id="avatar-iframe" allow="microphone"></iframe>
+    </div>
+    <div id="controls-overlay">
+        <button id="mic-button">🎤</button>
+        <div id="status">Presiona para iniciar conversación</div>
+    </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -19,7 +35,10 @@
             const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
             const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
             
-            if (!sessionId) { document.body.innerHTML = "<h1>Error: Falta ID de Sesión.</h1>"; return; }
+            if (!sessionId) { 
+                document.body.innerHTML = "<h1>Error: Falta ID de Sesión. Regresa al panel de briefing.</h1>"; 
+                return; 
+            }
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
@@ -31,8 +50,9 @@
             recognition.interimResults = false;
             recognition.continuous = false;
 
-            let socket, isConversationActive = false;
+            let socket;
             let iframeReady = false;
+            let isRecognizing = false;
 
             function sanitizeText(text) {
                 if (typeof text !== 'string') return '';
@@ -43,44 +63,89 @@
                 const wsUrl = `wss://${BACKEND_WS_HOST}/ws/${sessionId}`;
                 socket = new WebSocket(wsUrl);
                 
-                socket.onopen = () => { console.log("WebSocket conectado."); };
+                socket.onopen = () => {
+                    console.log("WebSocket conectado.");
+                    statusDiv.textContent = "Presiona para iniciar conversación";
+                };
+
                 socket.onmessage = (event) => {
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'ai_response' && msg.data) {
                         statusDiv.textContent = "Clara está respondiendo...";
                         avatarPoster.style.display = 'none';
                         avatarIframe.style.display = 'block';
+                        
                         const cleanText = sanitizeText(msg.data);
                         const messageToSend = { type: 'heygen_streaming_task', task: { text: cleanText }};
+
                         if (!iframeReady) {
                             avatarIframe.src = HEYGEN_IFRAME_URL;
-                            avatarIframe.onload = () => { iframeReady = true; setTimeout(() => { avatarIframe.contentWindow.postMessage(messageToSend, '*'); }, 500); };
+                            avatarIframe.onload = () => {
+                                iframeReady = true;
+                                setTimeout(() => {
+                                    avatarIframe.contentWindow.postMessage(messageToSend, '*');
+                                }, 500);
+                            };
                         } else {
                             avatarIframe.contentWindow.postMessage(messageToSend, '*');
                         }
                     } else if (msg.type === 'response_end') {
-                        // El evento onend de recognition ahora controla el estado
-                        if (!isConversationActive) { // Solo si el usuario no ha iniciado de nuevo
-                            statusDiv.textContent = "Presiona para iniciar conversación";
-                        }
+                        statusDiv.textContent = "Tu turno de hablar...";
                     }
                 };
-                socket.onclose = () => { console.log("WebSocket cerrado."); isConversationActive = false; micButton.classList.remove('active'); };
+
+                socket.onclose = () => {
+                    console.log("WebSocket cerrado. Intentando reconectar en 3 segundos...");
+                    setTimeout(connectWebSocket, 3000);
+                };
+
+                socket.onerror = (error) => {
+                    console.error("Error de WebSocket:", error);
+                };
             }
-            connectWebSocket(); // Conectamos una vez al cargar la página
+            
+            connectWebSocket(); // Conectamos al cargar la página
 
             micButton.addEventListener('click', () => {
-                if (isConversationActive) {
+                if (isRecognizing) {
                     recognition.stop();
                 } else {
                     recognition.start();
                 }
             });
 
-            recognition.onstart = () => { isConversationActive = true; micButton.classList.add('active'); statusDiv.textContent = "Escuchando..."; };
-            recognition.onresult = (event) => { const transcript = event.results[0][0].transcript; statusDiv.textContent = `Tú dijiste: "${transcript}"`; if (socket.readyState === WebSocket.OPEN) { socket.send(transcript); } };
-            recognition.onerror = (event) => { console.error("Error de reconocimiento:", event.error); statusDiv.textContent = "Error al escuchar."; isConversationActive = false; micButton.classList.remove('active'); };
-            recognition.onend = () => { isConversationActive = false; micButton.classList.remove('active'); statusDiv.textContent = "Procesando..."; };
+            recognition.onstart = () => {
+                isRecognizing = true;
+                micButton.classList.add('active');
+                statusDiv.textContent = "Escuchando...";
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[event.results.length - 1][0].transcript;
+                statusDiv.textContent = `Tú dijiste: "${transcript}"`;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(transcript);
+                } else {
+                    console.error("WebSocket no está conectado. No se puede enviar el texto.");
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Error de reconocimiento de voz:", event.error);
+                statusDiv.textContent = "Error al escuchar. Intenta de nuevo.";
+                isRecognizing = false;
+                micButton.classList.remove('active');
+            };
+
+            recognition.onend = () => {
+                isRecognizing = false;
+                micButton.classList.remove('active');
+                if (statusDiv.textContent.startsWith("Tú dijiste")) {
+                     statusDiv.textContent = "Procesando...";
+                } else {
+                     statusDiv.textContent = "Presiona para iniciar conversación";
+                }
+            };
         });
     </script>
 </body>
