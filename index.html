@@ -8,16 +8,24 @@
     </style>
 </head>
 <body>
-    <!-- ... (HTML sin cambios) ... -->
+    <div id="avatar-container">
+        <!-- ... (HTML sin cambios) ... -->
+    </div>
+    <div id="controls-overlay">
+        <!-- ... (HTML sin cambios) ... -->
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // --- INICIO DE LA CORRECCIÓN ---
+            // 1. Declaramos TODAS las constantes al principio.
             const micButton = document.getElementById('mic-button');
             const statusDiv = document.getElementById('status');
             const avatarPoster = document.getElementById('avatar-poster');
             const avatarIframe = document.getElementById('avatar-iframe');
             const sessionId = new URLSearchParams(window.location.search).get('session_id');
             const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
-            const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1อดcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
+            const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
             
             if (!sessionId) { document.body.innerHTML = "<h1>Error: Falta ID de Sesión.</h1>"; return; }
 
@@ -31,6 +39,8 @@
             let socket;
             let iframeReady = false;
             let isRecognizing = false;
+            // --- FIN DE LA CORRECCIÓN ---
+
 
             function sanitizeText(text) {
                 if (typeof text !== 'string') return '';
@@ -74,7 +84,7 @@
                     console.log("WebSocket cerrado.", event.reason);
                     statusDiv.textContent = "Conexión perdida. Reintentando...";
                     micButton.disabled = true;
-                    setTimeout(connectWebSocket, 3000); // Intenta reconectar
+                    setTimeout(connectWebSocket, 3000);
                 };
 
                 socket.onerror = (error) => {
@@ -84,7 +94,8 @@
                 };
             }
             
-            micButton.disabled = true; // Deshabilitado hasta que la conexión sea exitosa
+            // 2. Deshabilitamos el botón después de declararlo.
+            micButton.disabled = true; 
             connectWebSocket();
 
             micButton.addEventListener('click', () => {
