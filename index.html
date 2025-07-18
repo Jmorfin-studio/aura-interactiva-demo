@@ -16,11 +16,8 @@
     </div>
 
     <script>
-        // --- INICIO DE LA CORRECCIÓN FINAL ---
-        // Toda la lógica ahora vive dentro de este bloque para asegurar que la página ha cargado.
         document.addEventListener('DOMContentLoaded', function() {
-            
-            // 1. Declaramos todas las constantes al principio, DENTRO del listener.
+            // Declaramos todas las constantes al principio.
             const micButton = document.getElementById('mic-button');
             const statusDiv = document.getElementById('status');
             const avatarPoster = document.getElementById('avatar-poster');
@@ -29,34 +26,31 @@
             const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
             const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJLYXR5YV9Qcm9mZXNzaW9uYWxMb29rX3B1YmxpYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3YzLzM0OGRkZjUwM2M2NTRiOWJiYmI4YmVhOWY5MjEwZWFkXzU1ODcwL3ByZXZpZXdfdGFyZ2V0LndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6dHJ1ZSwia25vd2xlZGdlQmFzZUlkIjoiYzdmMzE5NmQyZjY3NDFjZDljYzk0YzI5YzlkOGNlNDkiLCJ1c2VybmFtZSI6IjYyNjk2MDAzY2M3YjQ0MDY5ZWI5ZTcyYzlhNDIMDIzIn0=';
             
-            // Verificación de seguridad
+            if (!sessionId) { document.body.innerHTML = "<h1>Error: Falta ID de Sesión.</h1>"; return; }
+
+            // Verificación crítica de que los elementos existen.
             if (!micButton || !statusDiv || !avatarPoster || !avatarIframe) {
-                console.error("Error crítico: No se encontraron uno o más elementos del DOM.");
+                console.error("Error fatal: Uno o más elementos del DOM no se encontraron. La aplicación no puede continuar.");
+                document.body.innerHTML = "<h1>Error de Carga. Por favor, refresca la página.</h1>";
                 return;
             }
-            if (!sessionId) { 
-                document.body.innerHTML = "<h1>Error: Falta ID de Sesión. Regresa al panel de briefing.</h1>"; 
-                return; 
-            }
 
-            // 2. Definimos la API de reconocimiento de voz.
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
-                alert("Tu navegador no soporta el reconocimiento de voz. Por favor, usa Chrome.");
+                alert("Tu navegador no soporta el reconocimiento de voz. Usa Chrome.");
                 micButton.disabled = true;
                 return;
             }
+
             const recognition = new SpeechRecognition();
             recognition.lang = 'es-MX';
             recognition.interimResults = false;
             recognition.continuous = false;
 
-            // 3. Declaramos variables de estado.
             let socket;
             let iframeReady = false;
             let isRecognizing = false;
 
-            // 4. Definimos las funciones.
             function sanitizeText(text) {
                 if (typeof text !== 'string') return '';
                 let clean = text.replace(/"/g, "'");
@@ -97,20 +91,13 @@
                 };
 
                 socket.onclose = () => {
-                    console.log("WebSocket cerrado. Reintentando en 3 segundos...");
+                    console.log("WebSocket cerrado. Reintentando...");
                     statusDiv.textContent = "Conexión perdida. Reintentando...";
                     micButton.disabled = true;
                     setTimeout(connectWebSocket, 3000);
                 };
-
-                socket.onerror = (error) => {
-                    console.error("Error de WebSocket:", error);
-                    statusDiv.textContent = "Error de conexión.";
-                    micButton.disabled = true;
-                };
             }
             
-            // 5. Asignamos los listeners de eventos.
             micButton.addEventListener('click', () => {
                 if (isRecognizing) {
                     recognition.stop();
@@ -118,20 +105,18 @@
                     if (socket && socket.readyState === WebSocket.OPEN) {
                         recognition.start();
                     } else {
-                        statusDiv.textContent = "Aún conectando... por favor espera.";
+                        statusDiv.textContent = "Aún conectando...";
                     }
                 }
             });
 
             recognition.onstart = () => { isRecognizing = true; micButton.classList.add('active'); statusDiv.textContent = "Escuchando..."; };
             recognition.onresult = (event) => { const transcript = event.results[event.results.length - 1][0].transcript; statusDiv.textContent = `Tú dijiste: "${transcript}"`; if (socket.readyState === WebSocket.OPEN) { socket.send(transcript); } };
-            recognition.onerror = (event) => { console.error("Error de reconocimiento de voz:", event.error); statusDiv.textContent = "Error al escuchar."; isRecognizing = false; micButton.classList.remove('active'); };
+            recognition.onerror = (event) => { console.error("Error de reconocimiento:", event.error); statusDiv.textContent = "Error al escuchar."; isRecognizing = false; micButton.classList.remove('active'); };
             recognition.onend = () => { isRecognizing = false; micButton.classList.remove('active'); statusDiv.textContent = "Procesando..."; };
 
-            // 6. Iniciamos la conexión.
             connectWebSocket();
         });
-        // --- FIN DE LA CORRECCIÓN FINAL ---
     </script>
 </body>
 </html>
