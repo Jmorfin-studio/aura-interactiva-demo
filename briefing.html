@@ -50,20 +50,11 @@
             const statusDiv = document.getElementById('status');
             const fileInput = document.getElementById('clientFiles');
             const fileListDiv = document.getElementById('file-list');
-            
-            // --- URL DE TU BACKEND ---
-            // Esta será la URL que te dará Render.com
-            const BACKEND_API_URL = "https://aura-interactiva-backend.onrender.com"; 
+            const BACKEND_API_URL = "https://aura-interactiva-backend.onrender.com";
 
-            if (!prepareButton) {
-                console.error("¡Error crítico! No se encontró el botón con id 'prepareButton'.");
+            if (!prepareButton || !statusDiv || !fileInput || !fileListDiv) {
+                console.error("Error fatal en briefing.html: No se encontraron uno o más elementos del DOM.");
                 return;
-            }
-            
-            // --- CORRECCIÓN ---
-            // Ahora la advertencia solo aparecerá si la URL es la de marcador de posición.
-            if (BACKEND_API_URL === "URL_DE_TU_BACKEND_EN_RENDER") {
-                alert("ADVERTENCIA: La URL del backend no ha sido configurada en briefing.html. El formulario no funcionará.");
             }
 
             fileInput.addEventListener('change', () => {
@@ -79,9 +70,8 @@
 
             prepareButton.addEventListener('click', async () => {
                 statusDiv.style.display = 'block';
-                statusDiv.innerText = "Enviando información a Clara... (Esto puede tardar un poco)";
+                statusDiv.innerText = "Enviando información a Clara... (Puede tardar)";
                 statusDiv.style.backgroundColor = '#e3f2fd';
-                statusDiv.style.color = '#0d47a1';
                 prepareButton.disabled = true;
 
                 const formData = new FormData();
@@ -100,26 +90,16 @@
                     });
 
                     const result = await response.json();
-
-                    if (!response.ok) {
-                        throw new Error(result.detail || "Error desconocido del servidor");
-                    }
+                    if (!response.ok) throw new Error(result.detail || "Error del servidor");
                     
                     statusDiv.innerText = result.message;
                     statusDiv.style.backgroundColor = '#d4edda';
-                    statusDiv.style.color = '#155724';
-
-                    const sessionId = result.session_id;
-                    
-                    const demoUrl = `index.html?session_id=${sessionId}`;
-                    
-                    const linkHtml = `<br><br><strong>¡Todo listo!</strong><br><a href="${demoUrl}" target="_blank">Haz clic aquí para iniciar la demo con Clara</a>`;
-                    statusDiv.innerHTML += linkHtml;
+                    const demoUrl = `index.html?session_id=${result.session_id}`;
+                    statusDiv.innerHTML += `<br><br><strong>¡Todo listo!</strong><br><a href="${demoUrl}" target="_blank">Haz clic aquí para iniciar la demo con Clara</a>`;
 
                 } catch (error) {
                     statusDiv.innerText = `Error: ${error.message}`;
                     statusDiv.style.backgroundColor = '#f8d7da';
-                    statusDiv.style.color = '#721c24';
                 } finally {
                     prepareButton.disabled = false;
                 }
