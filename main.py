@@ -1,4 +1,4 @@
-# main.py (VERSIÓN FINAL, ARQUITECTURA DE PRODUCCIÓN ROBUSTA)
+# main.py (VERSIÓN FINAL, CORREGIDA Y VERIFICADA)
 
 import os, asyncio, uuid
 from dotenv import load_dotenv
@@ -9,58 +9,74 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
-# ... (resto de imports sin cambios) ...
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader, WebBaseLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+# --- INICIO DE LA CORRECCIÓN ---
+# Restauramos la importación que faltaba
+from langchain.prompts import PromptTemplate
+# --- FIN DE LA CORRECCIÓN ---
+from langchain.schema.runnable import RunnablePassthrough
+from langchain.schema.output_parser import StrOutputParser
+from pinecone.exceptions import NotFoundException
+
 from pinecone import Pinecone
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
-# ... (código sin cambios) ...
+load_dotenv()
+OPENAI_API_key = os.getenv("OPENAI_API_KEY")
+PINECONE_API_key = os.getenv("PINECONE_API_KEY")
+PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 
-# --- COMPONENTES GLOBALES (CARGA PESADA AL INICIO) ---
+app = FastAPI(title="Aura Interactiva - Orquestador")
+
+# --- Configuración de CORS ---
+origins = ["https://aurainteractiva.netlify.app", "http://localhost", "http://localhost:8000"]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
 llm = ChatOpenAI(model_name="gpt-4o", temperature=0.3)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=1024)
-# ... (resto sin cambios) ...
+active_sessions: Dict[str, Any] = {}
 
-# --- 2. ENDPOINT DE BRIEFING (Sin cambios) ---
-# ... (código sin cambios) ...
+print("Inicializando cliente de Pinecone de forma explícita...")
+pinecone_client = Pinecone(api_key=PINECONE_API_key, environment=PINECONE_ENVIRONMENT)
+print(f"Accediendo al índice: {PINECONE_INDEX_NAME}")
+index = pinecone_client.Index(PINECONE_INDEX_NAME)
+vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
+print("¡Conexión con Pinecone y VectorStore establecidos con éxito!")
 
-# --- 3. LÓGICA DE WEBSOCKET (ARQUITECTURA DE COLA DE TAREAS) ---
-prompt_template_str = """...""" # Sin cambios
+# --- 2. ENDPOINT DE BRIEFING ---
+@app.post("/educar-sesion")
+async def educar_sesion(clientName: str = Form(...), clientCompany: str = Form(...), urls: str = Form(None), files: List[UploadFile] = File(None)):
+    session_id = str(uuid.uuid4()); print(f"Creando nueva sesión con ID: '{session_id}'")
+    all_docs = []; temp_dir = "temp_client_files"; os.makedirs(temp_dir, exist_ok=True)
+    if files:
+        for file in files:
+            file_path = os.path.join(temp_dir, file.filename);
+            with open(file_path, "wb") as buffer: buffer.write(await file.read())
+            loader_map = {".pdf": PyPDFLoader, ".docx": Docx2txtLoader, ".txt": TextLoader}; ext = os.path.splitext(file.filename)[1].lower()
+            if ext in loader_map: all_docs.extend(loader_map[ext](file_path).load())
+    if urls:
+        url_list = [url.strip() for url in urls.split('\n') if url.strip()];
+        if url_list: all_docs.extend(WebBaseLoader(url_list).load())
+    if all_docs:
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200); docs_split = text_splitter.split_documents(all_docs)
+        vectorstore.delete(delete_all=True, namespace=session_id); print(f"Namespace '{session_id}' limpiado.")
+        vectorstore.add_documents(documents=docs_split, namespace=session_id); print(f"¡Documentos indexados en namespace '{session_id}'!")
+    active_sessions[session_id] = {"clientName": clientName, "clientCompany": clientCompany, "chat_history": ""}
+    return {"message": f"¡Clara lista para {clientName}!", "session_id": session_id}
+
+# --- 3. LÓGICA DE WEBSOCKET (SIMPLIFICADA) ---
+prompt_template_str = """
+# CONSTITUCIÓN CONVERSACIONAL DE "CLARA"
+# Eres Clara, una asistente digital experta y carismática de "Aura Interactiva". Tu propósito es inspirar y demostrar el "arte de lo posible". Hablas de forma concisa y natural en español. Siempre terminas tus respuestas con una pregunta para mantener la conversación viva.
+# BRIEFING DE REUNIÓN ACTUAL: {briefing}
+# CONOCIMIENTO RELEVANTE DE LA SESIÓN: {context}
+# HISTORIAL DE CONVERSACIÓN: {history}
+# PREGUNTA DEL USUARIO: {question}
+# TU RESPUESTA (Como Clara):
+"""
 prompt = PromptTemplate.from_template(prompt_template_str)
-
-# Creamos una cola para procesar las peticiones de la IA en segundo plano
-# Esto evita que el WebSocket se bloquee.
-request_queue = asyncio.Queue()
-response_queues = {}
-
-async def ai_processing_worker():
-    print("Trabajador de IA iniciado, esperando tareas...")
-    while True:
-        websocket, session_id, user_text = await request_queue.get()
-        
-        try:
-            print(f"[{session_id}] Procesando: '{user_text}'")
-            session_data = active_sessions[session_id]
-            retriever = vectorstore.as_retriever(search_kwargs={'namespace': session_id})
-            rag_chain = ({"context": itemgetter("question") | retriever, "question": itemgetter("question"), "briefing": lambda x: f"Reunión con {session_data.get('clientName')}", "history": itemgetter("history")} | prompt | llm | StrOutputParser())
-            
-            session_data["chat_history"] += f"Humano: {user_text}\n"
-            full_response = await rag_chain.ainvoke({"question": user_text, "history": session_data["chat_history"]})
-            session_data["chat_history"] += f"Clara: {full_response}\n"
-            
-            print(f"[{session_id}] Respuesta generada: '{full_response}'")
-            if session_id in response_queues:
-                await response_queues[session_id].put(full_response)
-        except Exception as e:
-            print(f"!!!!!!!!!! ERROR EN EL TRABAJADOR DE IA !!!!!!!!!!!\n{e}")
-            if session_id in response_queues:
-                await response_queues[session_id].put(f"Error al procesar: {e}")
-        finally:
-            request_queue.task_done()
-
-@app.on_event("startup")
-async def startup_event():
-    # Iniciamos el trabajador de IA cuando la aplicación arranca
-    asyncio.create_task(ai_processing_worker())
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
@@ -68,43 +84,44 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     if session_id not in active_sessions:
         await websocket.close(code=4004, reason="ID de sesión no válido.")
         return
-    
-    response_queue = asyncio.Queue()
-    response_queues[session_id] = response_queue
 
     print(f"Conexión WebSocket para sesión '{session_id}' aceptada y estable.")
-    
-    async def receive_from_client():
-        try:
-            while True:
-                user_text = await websocket.receive_text()
-                await request_queue.put((websocket, session_id, user_text))
-        except WebSocketDisconnect:
-            pass
-
-    async def send_to_client():
-        try:
-            while True:
-                response_text = await response_queue.get()
-                await websocket.send_json({"type": "ai_response", "data": response_text})
-                await websocket.send_json({"type": "response_end"})
-        except asyncio.CancelledError:
-            pass
-
-    receive_task = asyncio.create_task(receive_from_client())
-    send_task = asyncio.create_task(send_to_client())
+    session_data = active_sessions[session_id]
+    retriever = vectorstore.as_retriever(search_kwargs={'namespace': session_id})
+    rag_chain = ({"context": itemgetter("question") | retriever, 
+                  "question": itemgetter("question"), 
+                  "briefing": lambda x: f"Estás en una reunión con {session_data.get('clientName', 'un cliente')} de la empresa {session_data.get('clientCompany', 'desconocida')}.", 
+                  "history": itemgetter("history")} 
+                 | prompt | llm | StrOutputParser())
 
     try:
-        await asyncio.gather(receive_task, send_task)
+        while True:
+            user_text = await websocket.receive_text()
+            print(f"Texto recibido del cliente: '{user_text}'")
+            session_data["chat_history"] += f"Humano: {user_text}\n"
+            full_response = await rag_chain.ainvoke({"question": user_text, "history": session_data["chat_history"]})
+            print(f"Respuesta generada por IA: '{full_response}'")
+            session_data["chat_history"] += f"Clara: {full_response}\n"
+            await websocket.send_json({"type": "ai_response", "data": full_response})
+            await websocket.send_json({"type": "response_end"})
+            print("Ciclo de conversación completado.")
     except WebSocketDisconnect:
         print(f"Cliente desconectado de sesión {session_id}")
+    except Exception as e:
+        print(f"Error crítico en la conexión WebSocket: {e}")
     finally:
-        receive_task.cancel()
-        send_task.cancel()
-        del response_queues[session_id]
         if session_id in active_sessions:
             del active_sessions[session_id]
-            print(f"Sesión {session_id} y recursos limpiados.")
+            print(f"Sesión {session_id} limpiada.")
 
-# --- Rutas de Archivos Estáticos (Sin cambios) ---
-# ... (código sin cambios) ...
+# --- Rutas de Archivos Estáticos ---
+@app.get("/briefing", response_class=FileResponse)
+async def get_briefing_page(): return "briefing.html"
+@app.get("/index.html", response_class=FileResponse)
+async def get_index_explicitly(): return "index.html"
+@app.get("/", response_class=FileResponse)
+async def get_index_page(): return "index.html"
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:main", host="0.0.0.0", port=8000)
