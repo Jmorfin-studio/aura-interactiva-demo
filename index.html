@@ -2,63 +2,88 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Aura Interactiva - Test PING-PONG</title>
+    <title>Aura Interactiva - Demo Final</title>
     <style>
-        body, html { margin: 0; padding: 0; background-color: #121212; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
-        #avatar-container { display: none; } /* Ocultamos el avatar para esta prueba */
-        #controls-overlay { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 10; }
-        #mic-button { background-color: #4285F4; width: 80px; height: 80px; border-radius: 50%; border: none; cursor: pointer; }
-        #mic-button:disabled { background-color: #999; }
-        #status { font-size: 16px; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px; }
+        /* ... CSS sin cambios ... */
     </style>
 </head>
 <body>
-    <div id="avatar-container"></div>
-    <div id="controls-overlay">
-        <button id="mic-button">🎤</button>
-        <div id="status">Test de Conexión PING-PONG</div>
+    <div id="avatar-container">
+        <!-- ... HTML sin cambios ... -->
     </div>
+    <div id="controls-overlay">
+        <!-- ... HTML sin cambios ... -->
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // ... (Toda la lógica de la última versión funcional de index.html) ...
             const micButton = document.getElementById('mic-button');
             const statusDiv = document.getElementById('status');
+            const avatarPoster = document.getElementById('avatar-poster');
+            const avatarIframe = document.getElementById('avatar-iframe');
             const sessionId = new URLSearchParams(window.location.search).get('session_id');
             const BACKEND_WS_HOST = "aura-interactiva-backend.onrender.com";
+            const HEYGEN_IFRAME_URL = 'https://labs.heygen.com/guest/streaming-embed?share=...'; // URL de HeyGen
+            
+            if (!micButton || !statusDiv || !avatarPoster || !avatarIframe) {
+                console.error("Error fatal: Elementos del DOM no encontrados.");
+                return;
+            }
+            if (!sessionId) { document.body.innerHTML = "<h1>Error: Falta ID de Sesión.</h1>"; return; }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) { alert("Tu navegador no soporta el reconocimiento de voz. Usa Chrome."); return; }
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'es-MX';
+            recognition.interimResults = false;
+            recognition.continuous = false;
 
             let socket;
-            micButton.disabled = true;
+            let iframeReady = false;
+            let isRecognizing = false;
+
+            function sanitizeText(text) {
+                if (typeof text !== 'string') return '';
+                let clean = text.replace(/"/g, "'").replace(/[\n\r\t]/g, ' ').replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+                return clean.replace(/\s+/g, ' ').trim();
+            }
 
             function connectWebSocket() {
-                statusDiv.textContent = "Conectando para PING-PONG...";
+                statusDiv.textContent = "Conectando...";
+                micButton.disabled = true;
                 const wsUrl = `wss://${BACKEND_WS_HOST}/ws/${sessionId}`;
                 socket = new WebSocket(wsUrl);
-
-                socket.onopen = () => {
-                    statusDiv.textContent = "Conectado. Presiona el micrófono para enviar PING.";
-                    micButton.disabled = false;
-                };
-
+                
+                socket.onopen = () => { console.log("WebSocket conectado."); statusDiv.textContent = "Presiona para hablar"; micButton.disabled = false; };
                 socket.onmessage = (event) => {
-                    // Ahora esperamos texto plano, no JSON
-                    console.log("Respuesta del servidor (PONG):", event.data);
-                    statusDiv.textContent = "Respuesta recibida: " + event.data;
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'ai_response' && msg.data) {
+                        statusDiv.textContent = "Clara está respondiendo...";
+                        avatarPoster.style.display = 'none';
+                        avatarIframe.style.display = 'block';
+                        const cleanText = sanitizeText(msg.data);
+                        const messageToSend = { type: 'heygen_streaming_task', task: { text: cleanText }};
+                        if (!iframeReady) {
+                            avatarIframe.src = HEYGEN_IFRAME_URL;
+                            avatarIframe.onload = () => { iframeReady = true; setTimeout(() => { avatarIframe.contentWindow.postMessage(messageToSend, '*'); }, 500); };
+                        } else {
+                            avatarIframe.contentWindow.postMessage(messageToSend, '*');
+                        }
+                    } else if (msg.type === 'response_end') {
+                        statusDiv.textContent = "Tu turno de hablar...";
+                    }
                 };
-
-                socket.onclose = () => {
-                    statusDiv.textContent = "Desconectado. Reintentando...";
-                    micButton.disabled = true;
-                    setTimeout(connectWebSocket, 3000);
-                };
+                socket.onclose = () => { console.log("WebSocket cerrado. Reintentando..."); statusDiv.textContent = "Reconectando..."; micButton.disabled = true; setTimeout(connectWebSocket, 3000); };
             }
-            connectWebSocket();
+            
+            micButton.addEventListener('click', () => { if (isRecognizing) { recognition.stop(); } else { recognition.start(); } });
+            recognition.onstart = () => { isRecognizing = true; micButton.classList.add('active'); statusDiv.textContent = "Escuchando..."; };
+            recognition.onresult = (event) => { const transcript = event.results[event.results.length - 1][0].transcript; statusDiv.textContent = `Tú dijiste: "${transcript}"`; if (socket && socket.readyState === WebSocket.OPEN) { socket.send(transcript); } };
+            recognition.onerror = (event) => { console.error("Error de reconocimiento:", event.error); isRecognizing = false; micButton.classList.remove('active'); statusDiv.textContent = "Error al escuchar."; };
+            recognition.onend = () => { isRecognizing = false; micButton.classList.remove('active'); statusDiv.textContent = "Procesando..."; };
 
-            micButton.addEventListener('click', () => {
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    const message = "PING desde el navegador a las " + new Date().toLocaleTimeString();
-                    statusDiv.textContent = "Enviando PING...";
-                    socket.send(message);
-                }
-            });
+            connectWebSocket();
         });
     </script>
 </body>
